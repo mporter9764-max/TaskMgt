@@ -54,6 +54,7 @@ export default function AppShell() {
   const [tab, setTab] = useState<Tab>("timeline");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTask, setEditorTask] = useState<Task | null>(null);
+  const [newTaskGroupId, setNewTaskGroupId] = useState<string | undefined>(undefined);
   const [groupMgrOpen, setGroupMgrOpen] = useState(false);
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
 
@@ -132,8 +133,9 @@ export default function AppShell() {
     [activeTasks, hiddenGroups]
   );
 
-  const openNew = () => {
+  const openNew = (groupId?: string) => {
     setEditorTask(null);
+    setNewTaskGroupId(groupId);
     setEditorOpen(true);
   };
   const openEdit = (t: DisplayTask) => {
@@ -199,7 +201,7 @@ export default function AppShell() {
             <IconButton label="Manage groups" onClick={() => setGroupMgrOpen(true)}>
               <Cog />
             </IconButton>
-            <Button size="sm" onClick={openNew} className="hidden sm:inline-flex">
+            <Button size="sm" onClick={() => openNew()} className="hidden sm:inline-flex">
               <Plus width={16} height={16} />
               New task
             </Button>
@@ -282,7 +284,7 @@ export default function AppShell() {
 
             <div className="flex-1 overflow-hidden">
               {isDesktop ? (
-                <SwimlaneView tasks={timelineTasks} groups={groups} onEdit={openEdit} />
+                <SwimlaneView tasks={timelineTasks} groups={groups} onEdit={openEdit} onAddTask={openNew} />
               ) : (
                 <div className="h-full overflow-y-auto">
                   <AgendaView
@@ -321,7 +323,7 @@ export default function AppShell() {
 
         {/* Mobile FAB */}
         <button
-          onClick={openNew}
+          onClick={() => openNew()}
           aria-label="New task"
           className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-pop transition-transform hover:scale-105 sm:hidden"
         >
@@ -333,6 +335,7 @@ export default function AppShell() {
         open={editorOpen}
         task={editorTask}
         groups={groups}
+        defaultGroupId={newTaskGroupId}
         onClose={() => setEditorOpen(false)}
         onSaved={reload}
       />

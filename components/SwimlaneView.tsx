@@ -14,6 +14,7 @@ import {
   monthName,
 } from "@/lib/dates";
 import { tint, deepen } from "@/lib/colors";
+import { Plus } from "./icons";
 
 const DAY_W = 46;
 const LABEL_W = 150;
@@ -27,10 +28,12 @@ export function SwimlaneView({
   tasks,
   groups,
   onEdit,
+  onAddTask,
 }: {
   tasks: Task[];
   groups: Group[];
   onEdit: (t: Task) => void;
+  onAddTask: (groupId: string) => void;
 }) {
   const today = todayStr();
 
@@ -125,12 +128,20 @@ export function SwimlaneView({
             <div key={group.id} className="flex border-b border-line">
               {/* Sticky group label */}
               <div
-                className="sticky left-0 z-10 flex-none px-3 py-2"
+                className="group/label sticky left-0 z-10 flex-none px-3 py-2"
                 style={{ width: LABEL_W, backgroundColor: tint(group.color, 0.22) }}
               >
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: deepen(group.color) }} />
                   <span className="truncate text-sm font-medium text-ink">{group.name}</span>
+                  <button
+                    aria-label={`Add task to ${group.name}`}
+                    title={`Add task to ${group.name}`}
+                    onClick={() => onAddTask(group.id)}
+                    className="ml-auto flex h-5 w-5 flex-none items-center justify-center rounded-full text-muted opacity-0 transition-opacity hover:bg-black/[0.08] hover:text-ink group-hover/label:opacity-100"
+                  >
+                    <Plus width={13} height={13} />
+                  </button>
                 </div>
                 <span className="text-xs text-muted">{groupTasks.length} task{groupTasks.length === 1 ? "" : "s"}</span>
               </div>
