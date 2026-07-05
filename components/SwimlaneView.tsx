@@ -13,12 +13,15 @@ import {
   parseYMD,
   monthName,
 } from "@/lib/dates";
-import { tint, deepen, readableText } from "@/lib/colors";
+import { tint, deepen } from "@/lib/colors";
 
 const DAY_W = 46;
 const LABEL_W = 150;
-const BAR_H = 30;
-const BAR_GAP = 6;
+const STRIP_H = 9; // the colored strip showing the exact date span
+const LABEL_GAP = 3; // space between strip and title label
+const TITLE_H = 16; // title label row height
+const LANE_H = STRIP_H + LABEL_GAP + TITLE_H;
+const BAR_GAP = 9; // vertical space between lanes
 
 export function SwimlaneView({
   tasks,
@@ -116,7 +119,7 @@ export function SwimlaneView({
         {visibleGroups.map((group) => {
           const groupTasks = tasks.filter((t) => t.group_id === group.id);
           const lanes = packLanes(groupTasks);
-          const rowH = Math.max(1, lanes.length) * (BAR_H + BAR_GAP) + BAR_GAP;
+          const rowH = Math.max(1, lanes.length) * (LANE_H + BAR_GAP) + BAR_GAP;
 
           return (
             <div key={group.id} className="flex border-b border-line">
@@ -152,34 +155,51 @@ export function SwimlaneView({
                   />
                 ))}
 
-                {/* task bars */}
+                {/* task bars: a slim date strip + a title label below it */}
                 {lanes.map((lane, laneIdx) =>
-                  lane.map((t) => {
+                  lane.map((t, i) => {
                     const offset = daysBetween(rangeStart, t.start_date);
                     const end = t.end_date ?? t.start_date;
                     const span = daysBetween(t.start_date, end) + 1;
                     const left = offset * DAY_W + 2;
-                    const width = span * DAY_W - 4;
+                    const stripWidth = span * DAY_W - 4;
+
+                    // Let the title extend rightward into empty lane space (up to the
+                    // next task in this lane, or the end of the visible range) so
+                    // short single-day tasks aren't clipped to a 1-day-wide box.
+                    const next = lane[i + 1];
+                    const rightLimit = next
+                      ? daysBetween(rangeStart, next.start_date) * DAY_W + 2 - 6
+                      : days.length * DAY_W - 4;
+                    const labelWidth = Math.max(stripWidth, rightLimit - left);
+
+                    const top = BAR_GAP + laneIdx * (LANE_H + BAR_GAP);
+                    const complete = t.is_complete;
+
                     return (
-                      <button
-                        key={t.id}
-                        onClick={() => onEdit(t)}
-                        title={t.title}
-                        className="absolute flex items-center overflow-hidden rounded-md px-2 text-left shadow-card transition-transform hover:-translate-y-px"
-                        style={{
-                          left,
-                          width,
-                          top: BAR_GAP + laneIdx * (BAR_H + BAR_GAP),
-                          height: BAR_H,
-                          backgroundColor: t.is_complete ? "#EEF0F3" : group.color,
-                          color: t.is_complete ? "#9AA1AC" : readableText(group.color),
-                          border: `1px solid ${deepen(group.color, 0.9)}`,
-                        }}
-                      >
-                        <span className={`truncate text-xs font-medium ${t.is_complete ? "line-through" : ""}`}>
+                      <div key={t.id} className="absolute" style={{ left, top, width: labelWidth }}>
+                        <button
+                          onClick={() => onEdit(t)}
+                          title={t.title}
+                          className="block rounded-sm shadow-card transition-transform hover:-translate-y-px"
+                          style={{
+                            width: stripWidth,
+                            height: STRIP_H,
+                            backgroundColor: complete ? "#EEF0F3" : group.color,
+                            border: `1px solid ${deepen(group.color, 0.9)}`,
+                          }}
+                        />
+                        <button
+                          onClick={() => onEdit(t)}
+                          title={t.title}
+                          className={`mt-[3px] block max-w-full truncate text-left text-xs font-medium leading-none ${
+                            complete ? "text-faint line-through" : "text-ink"
+                          }`}
+                          style={{ width: labelWidth }}
+                        >
                           {t.title}
-                        </span>
-                      </button>
+                        </button>
+                      </div>
                     );
                   })
                 )}
