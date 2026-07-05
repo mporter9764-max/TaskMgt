@@ -3,7 +3,7 @@
 import type { Group, Task } from "@/lib/types";
 import { monthDay, isPast } from "@/lib/dates";
 import { tint, deepen } from "@/lib/colors";
-import { Bell, Check, ListChecks, ArrowRight } from "./icons";
+import { Bell, Check, ListChecks, ArrowRight, Repeat } from "./icons";
 
 export type Trigger = { kind: "start" | "reminder" | "overdue"; date: string };
 
@@ -94,6 +94,13 @@ export function TaskCard({
             >
               <ListChecks width={12} height={12} />
               {checklist.done}/{checklist.total}
+            </span>
+          )}
+
+          {task.recurrence && task.recurrence !== "none" && (
+            <span className="inline-flex items-center gap-1 text-faint">
+              <Repeat width={12} height={12} />
+              {task.recurrence}
             </span>
           )}
         </div>

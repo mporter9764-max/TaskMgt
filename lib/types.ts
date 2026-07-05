@@ -1,6 +1,8 @@
 // Types mirror the Supabase schema exactly.
 // Dates are day-level strings in 'YYYY-MM-DD' form (never timestamps).
 
+export type Recurrence = "none" | "daily" | "weekly" | "monthly" | "yearly";
+
 export type Group = {
   id: string;
   name: string;
@@ -17,10 +19,26 @@ export type Task = {
   start_date: string; // 'YYYY-MM-DD'
   end_date: string | null; // null = single-day task
   reminder_date: string | null;
+  recurrence: Recurrence;
   is_complete: boolean;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// A single generated occurrence of a task, shaped like a Task so the views can
+// render it directly. Recurring templates are shown ONLY through these.
+export type DisplayTask = Task & {
+  recurring?: boolean; // true if this row is a generated occurrence
+  templateId?: string; // the real tasks.id it was generated from
+  occDate?: string; // the occurrence's start date (its identity within a series)
+};
+
+export type OccurrenceCompletion = {
+  id: string;
+  task_id: string;
+  occurrence_date: string;
+  completed_at: string;
 };
 
 export type ChecklistItem = {
@@ -45,6 +63,7 @@ export type TaskDraft = {
   start_date: string;
   end_date: string | null;
   reminder_date: string | null;
+  recurrence: Recurrence;
 };
 
 export type ChecklistDraft = {

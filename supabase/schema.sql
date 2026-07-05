@@ -39,6 +39,8 @@ create table if not exists tasks (
   start_date     date not null,               -- #4
   end_date       date,                        -- #4  (null = single-day task)
   reminder_date  date,                        -- #12 (independent of start/end)
+  recurrence     text not null default 'none' -- none|daily|weekly|monthly|yearly
+                 check (recurrence in ('none','daily','weekly','monthly','yearly')),
   is_complete    boolean not null default false,
   completed_at   timestamptz,                 -- #14 auto-set by trigger
   created_at     timestamptz not null default now(),
@@ -58,6 +60,19 @@ create table if not exists checklist_items (
   is_checked  boolean not null default false,
   sort_order  integer not null default 0
 );
+
+-- ----------------------------------------------------------------------------
+-- OCCURRENCE_COMPLETIONS  —  per-occurrence completion for recurring tasks
+-- ----------------------------------------------------------------------------
+create table if not exists occurrence_completions (
+  id               uuid primary key default gen_random_uuid(),
+  task_id          uuid not null references tasks(id) on delete cascade,
+  occurrence_date  date not null,
+  completed_at     timestamptz not null default now(),
+  unique (task_id, occurrence_date)
+);
+
+create index if not exists idx_occ_task on occurrence_completions(task_id);
 
 -- ----------------------------------------------------------------------------
 -- SETTINGS  —  single locked row (the Upcoming window)  #13
@@ -128,6 +143,7 @@ create index if not exists idx_checklist_task      on checklist_items(task_id);
 alter table groups          enable row level security;
 alter table tasks           enable row level security;
 alter table checklist_items enable row level security;
+alter table occurrence_completions enable row level security;
 alter table settings        enable row level security;
 
 drop policy if exists "public all" on groups;
@@ -140,6 +156,10 @@ create policy "public all" on tasks
 
 drop policy if exists "public all" on checklist_items;
 create policy "public all" on checklist_items
+  for all to anon, authenticated using (true) with check (true);
+
+drop policy if exists "public all" on occurrence_completions;
+create policy "public all" on occurrence_completions
   for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public all" on settings;

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Group } from "@/lib/types";
-import { createGroup, updateGroup, deleteGroup } from "@/lib/api";
+import { createGroup, updateGroup, deleteGroup, reorderGroups } from "@/lib/api";
 import { PASTEL_PALETTE, deepen } from "@/lib/colors";
 import { Modal, Button, TextInput } from "./ui";
-import { Plus, Trash, Check } from "./icons";
+import { Plus, Trash, Check, ChevronUp, ChevronDown } from "./icons";
 
 export function GroupManager({
   open,
@@ -25,14 +25,35 @@ export function GroupManager({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Local ordering so an arrow click reorders instantly, before the DB round-trip finishes.
+  const [order, setOrder] = useState<Group[]>(groups);
+  useEffect(() => {
+    setOrder(groups);
+  }, [groups]);
+
+  async function move(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= order.length) return;
+    const next = [...order];
+    [next[index], next[target]] = [next[target], next[index]];
+    setOrder(next); // optimistic
+    try {
+      await reorderGroups(next.map((g) => g.id));
+      onChanged();
+    } catch (e: any) {
+      setOrder(order); // revert on failure
+      setErr(e?.message ?? "Couldn't save the new order.");
+    }
+  }
+
   async function addGroup() {
     if (!newName.trim()) return;
     setBusy(true);
     setErr(null);
     try {
-      await createGroup(newName.trim(), newColor, groups.length + 1);
+      await createGroup(newName.trim(), newColor, order.length + 1);
       setNewName("");
-      setNewColor(PASTEL_PALETTE[(groups.length + 1) % PASTEL_PALETTE.length]);
+      setNewColor(PASTEL_PALETTE[(order.length + 1) % PASTEL_PALETTE.length]);
       onChanged();
     } catch (e: any) {
       setErr(e?.message ?? "Couldn't add the group.");
@@ -83,8 +104,26 @@ export function GroupManager({
       <div className="space-y-4">
         {/* Existing groups */}
         <div className="space-y-2">
-          {groups.map((g) => (
+          {order.map((g, i) => (
             <div key={g.id} className="flex items-center gap-2 rounded-lg border border-line p-2">
+              <div className="flex flex-none flex-col">
+                <button
+                  aria-label={`Move ${g.name} up`}
+                  disabled={i === 0}
+                  onClick={() => move(i, -1)}
+                  className="flex h-4 w-6 items-center justify-center rounded text-faint hover:bg-black/[0.05] hover:text-ink disabled:opacity-20 disabled:hover:bg-transparent"
+                >
+                  <ChevronUp width={13} height={13} />
+                </button>
+                <button
+                  aria-label={`Move ${g.name} down`}
+                  disabled={i === order.length - 1}
+                  onClick={() => move(i, 1)}
+                  className="flex h-4 w-6 items-center justify-center rounded text-faint hover:bg-black/[0.05] hover:text-ink disabled:opacity-20 disabled:hover:bg-transparent"
+                >
+                  <ChevronDown width={13} height={13} />
+                </button>
+              </div>
               <ColorDots value={g.color} onPick={(c) => recolor(g, c)} />
               <input
                 defaultValue={g.name}

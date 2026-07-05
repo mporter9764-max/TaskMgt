@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Group, Task, ChecklistDraft } from "@/lib/types";
+import type { Group, Task, ChecklistDraft, Recurrence } from "@/lib/types";
 import { todayStr } from "@/lib/dates";
 import {
   createTask,
@@ -35,6 +35,7 @@ export function TaskEditor({
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState("");
   const [reminderDate, setReminderDate] = useState("");
+  const [recurrence, setRecurrence] = useState<Recurrence>("none");
   const [notes, setNotes] = useState("");
   const [checklist, setChecklist] = useState<ChecklistDraft[]>([]);
   const [newItem, setNewItem] = useState("");
@@ -51,6 +52,7 @@ export function TaskEditor({
       setStartDate(task.start_date);
       setEndDate(task.end_date ?? "");
       setReminderDate(task.reminder_date ?? "");
+      setRecurrence(task.recurrence ?? "none");
       setNotes(task.notes ?? "");
       fetchChecklist(task.id)
         .then((items) =>
@@ -63,6 +65,7 @@ export function TaskEditor({
       setStartDate(todayStr());
       setEndDate("");
       setReminderDate("");
+      setRecurrence("none");
       setNotes("");
       setChecklist([]);
     }
@@ -91,6 +94,7 @@ export function TaskEditor({
         start_date: startDate,
         end_date: endDate || null,
         reminder_date: reminderDate || null,
+        recurrence,
       };
       const saved = task ? await updateTask(task.id, draft) : await createTask(draft);
       await saveChecklist(saved.id, checklist);
@@ -181,6 +185,27 @@ export function TaskEditor({
 
         <Field label="Reminder" hint="Independent of start and end — used by the Upcoming tab">
           <DateInput value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} />
+        </Field>
+
+        <Field
+          label="Repeats"
+          hint={
+            recurrence === "none"
+              ? undefined
+              : "Editing a repeating task changes every occurrence. Completing one only affects that day."
+          }
+        >
+          <select
+            value={recurrence}
+            onChange={(e) => setRecurrence(e.target.value as Recurrence)}
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+          >
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
         </Field>
 
         <Field label="Checklist">

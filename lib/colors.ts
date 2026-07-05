@@ -31,13 +31,19 @@ export function deepen(hex: string, amount = 0.82): string {
 // A palette offered in the group editor. Soft, works on a white-ish canvas.
 export const PASTEL_PALETTE = [
   "#AEDFF7", // sky
-  "#C3E8C9", // mint
-  "#FFD9C0", // peach
-  "#E4C7F5", // lavender
-  "#FFF3B0", // butter
-  "#F7C5D9", // pink
-  "#C7E9E4", // teal
-  "#D9E4C7", // sage
   "#CBD5F5", // periwinkle
+  "#C3E8C9", // mint
+  "#D9E4C7", // sage
+  "#C7E9E4", // teal
+  "#A8E0E8", // aqua
+  "#FFF3B0", // butter
+  "#FCE1A8", // gold
+  "#FFD9C0", // peach
   "#F5D5C0", // apricot
+  "#FFC9C9", // light red
+  "#FFB7A7", // coral
+  "#F7C5D9", // pink
+  "#F9C6D3", // rose
+  "#E4C7F5", // lavender
+  "#D7B8E8", // orchid
 ];

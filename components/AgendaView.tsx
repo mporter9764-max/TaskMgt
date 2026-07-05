@@ -9,6 +9,7 @@ import {
   daysBetween,
   weekday,
   monthDay,
+  monthShort,
   isToday,
   isWeekend,
 } from "@/lib/dates";
@@ -67,25 +68,22 @@ export function AgendaView({
 
   return (
     <div className="mx-auto max-w-2xl px-3 pb-28 pt-2">
-      {days.map((day) => {
+      {days.map((day, idx) => {
         const starting = startingByDay.get(day) ?? [];
         const ongoing = ongoingOn(day);
         const hasContent = starting.length > 0 || ongoing.length > 0;
         const anchor = isToday(day) ? { id: "today-anchor" as string } : {};
+        const showMonth = idx === 0 || day.slice(0, 7) !== days[idx - 1].slice(0, 7);
 
-        // Slim row for empty days (kept visible per requirement, but low height).
-        if (!hasContent) {
-          return (
-            <div key={day} {...anchor} className="flex items-center gap-3 py-1 pl-1">
-              <DayTick day={day} muted />
-              <div className="h-px flex-1 bg-line/70" />
-            </div>
-          );
-        }
-
-        return (
-          <div key={day} {...anchor} className="mb-1">
-            <div className="sticky top-0 z-10 -mx-3 bg-canvas/90 px-3 py-1.5 backdrop-blur">
+        const inner = !hasContent ? (
+          // Slim row for empty days (kept visible per requirement, but low height).
+          <div className="flex items-center gap-3 py-1">
+            <DayTick day={day} muted />
+            <div className="h-px flex-1 bg-line/70" />
+          </div>
+        ) : (
+          <div className="mb-1">
+            <div className="sticky top-0 z-10 bg-canvas/90 py-1.5 backdrop-blur">
               <DayHeader day={day} />
             </div>
             <div className="space-y-2 pt-1.5">
@@ -117,6 +115,22 @@ export function AgendaView({
                 );
               })}
             </div>
+          </div>
+        );
+
+        return (
+          <div key={day} {...anchor} className="flex gap-2">
+            {/* Left month rail — month name appears beside its first day. */}
+            <div className="w-9 flex-none">
+              {showMonth && (
+                <div className="sticky top-0 z-20 pt-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-accent">
+                    {monthShort(day)}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">{inner}</div>
           </div>
         );
       })}

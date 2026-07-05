@@ -11,6 +11,7 @@ import {
   isToday,
   isWeekend,
   parseYMD,
+  monthName,
 } from "@/lib/dates";
 import { tint, deepen, readableText } from "@/lib/colors";
 
@@ -50,33 +51,66 @@ export function SwimlaneView({
   const totalW = LABEL_W + days.length * DAY_W;
   const visibleGroups = groups.filter((g) => tasks.some((t) => t.group_id === g.id) || true);
 
+  // Group consecutive days into month segments for the month band.
+  const monthSegments = useMemo(() => {
+    const segs: { key: string; label: string; count: number }[] = [];
+    for (const day of days) {
+      const d = parseYMD(day);
+      const label = `${monthName(day)} ${d.getFullYear()}`;
+      const last = segs[segs.length - 1];
+      if (last && last.label === label) last.count += 1;
+      else segs.push({ key: day, label, count: 1 });
+    }
+    return segs;
+  }, [days]);
+
   return (
     <div className="h-full overflow-auto scroll-thin px-4 py-3">
       <div style={{ width: totalW }} className="min-w-full">
-        {/* Day axis header */}
-        <div className="sticky top-0 z-20 flex bg-canvas/95 backdrop-blur">
-          <div
-            className="sticky left-0 z-30 flex-none border-b border-line bg-canvas/95"
-            style={{ width: LABEL_W }}
-          />
-          {days.map((day) => (
+        {/* Sticky header: month band + day axis */}
+        <div className="sticky top-0 z-20 bg-canvas/95 backdrop-blur">
+          {/* Month band */}
+          <div className="flex">
+            <div className="sticky left-0 z-30 flex-none bg-canvas/95" style={{ width: LABEL_W }} />
+            {monthSegments.map((seg, i) => (
+              <div
+                key={seg.key}
+                className="flex-none overflow-hidden whitespace-nowrap px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted"
+                style={{
+                  width: seg.count * DAY_W,
+                  borderLeft: i === 0 ? "none" : "1px solid #E7E9EE",
+                }}
+              >
+                {seg.label}
+              </div>
+            ))}
+          </div>
+          {/* Day axis */}
+          <div className="flex">
             <div
-              key={day}
-              id={isToday(day) ? "today-anchor" : undefined}
-              className={`flex-none border-b border-line py-1.5 text-center ${
-                isWeekend(day) ? "bg-black/[0.02]" : ""
-              }`}
-              style={{ width: DAY_W }}
-            >
-              <div className={`text-[10px] uppercase ${isToday(day) ? "font-bold text-accent" : "text-faint"}`}>
-                {weekday(day)}
+              className="sticky left-0 z-30 flex-none border-b border-line bg-canvas/95"
+              style={{ width: LABEL_W }}
+            />
+            {days.map((day) => (
+              <div
+                key={day}
+                id={isToday(day) ? "today-anchor" : undefined}
+                className={`flex-none border-b border-line py-1.5 text-center ${
+                  isWeekend(day) ? "bg-black/[0.02]" : ""
+                }`}
+                style={{ width: DAY_W }}
+              >
+                <div className={`text-[10px] uppercase ${isToday(day) ? "font-bold text-accent" : "text-faint"}`}>
+                  {weekday(day)}
+                </div>
+                <div className={`text-xs ${isToday(day) ? "font-bold text-accent" : "text-muted"}`}>
+                  {parseYMD(day).getDate()}
+                </div>
               </div>
-              <div className={`text-xs ${isToday(day) ? "font-bold text-accent" : "text-muted"}`}>
-                {parseYMD(day).getDate()}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+
 
         {/* Group rows */}
         {visibleGroups.map((group) => {

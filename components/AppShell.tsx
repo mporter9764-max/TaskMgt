@@ -1,16 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Group, Task, ChecklistItem, Settings } from "@/lib/types";
+import type { Group, Task, DisplayTask, ChecklistItem, Settings, OccurrenceCompletion } from "@/lib/types";
 import { isConfigured } from "@/lib/supabase";
 import {
   fetchGroups,
   fetchTasks,
   fetchSettings,
   fetchAllChecklistItems,
+  fetchOccurrenceCompletions,
   setTaskComplete,
+  completeOccurrence,
+  uncompleteOccurrence,
   updateWindowDays,
 } from "@/lib/api";
+import { expandTasks } from "@/lib/recurrence";
+import { todayStr } from "@/lib/dates";
 import { deepen } from "@/lib/colors";
 import { AgendaView } from "./AgendaView";
 import { SwimlaneView } from "./SwimlaneView";
@@ -41,6 +46,7 @@ export default function AppShell() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [completions, setCompletions] = useState<OccurrenceCompletion[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,16 +59,18 @@ export default function AppShell() {
 
   const reload = useCallback(async () => {
     try {
-      const [g, t, s, c] = await Promise.all([
+      const [g, t, s, c, oc] = await Promise.all([
         fetchGroups(),
         fetchTasks(),
         fetchSettings(),
         fetchAllChecklistItems(),
+        fetchOccurrenceCompletions(),
       ]);
       setGroups(g);
       setTasks(t);
       setSettings(s);
       setChecklistItems(c);
+      setCompletions(oc);
       setError(null);
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load your data.");
@@ -99,8 +107,26 @@ export default function AppShell() {
     return m;
   }, [tasks]);
 
-  const activeTasks = useMemo(() => tasks.filter((t) => !t.is_complete), [tasks]);
-  const completedTasks = useMemo(() => tasks.filter((t) => t.is_complete), [tasks]);
+  // Expand recurring templates into concrete occurrences; non-recurring pass through.
+  const today = todayStr();
+  const expanded = useMemo(
+    () => expandTasks(tasks, completions, today),
+    [tasks, completions, today]
+  );
+
+  // Checklist counts are keyed by real task id; map occurrences back to their template's counts.
+  const displayChecklistCounts = useMemo(() => {
+    const m: Record<string, { done: number; total: number }> = { ...checklistCounts };
+    for (const dt of expanded) {
+      if (dt.recurring && dt.templateId && checklistCounts[dt.templateId]) {
+        m[dt.id] = checklistCounts[dt.templateId];
+      }
+    }
+    return m;
+  }, [expanded, checklistCounts]);
+
+  const activeTasks = useMemo(() => expanded.filter((t) => !t.is_complete), [expanded]);
+  const completedTasks = useMemo(() => expanded.filter((t) => t.is_complete), [expanded]);
   const timelineTasks = useMemo(
     () => activeTasks.filter((t) => !hiddenGroups.has(t.group_id)),
     [activeTasks, hiddenGroups]
@@ -110,12 +136,31 @@ export default function AppShell() {
     setEditorTask(null);
     setEditorOpen(true);
   };
-  const openEdit = (t: Task) => {
-    setEditorTask(t);
+  const openEdit = (t: DisplayTask) => {
+    // Editing an occurrence edits its underlying series.
+    const real = t.recurring && t.templateId ? tasks.find((x) => x.id === t.templateId) ?? null : (t as Task);
+    setEditorTask(real);
     setEditorOpen(true);
   };
-  const toggleComplete = async (t: Task) => {
-    // optimistic
+  const toggleComplete = async (t: DisplayTask) => {
+    if (t.recurring && t.templateId && t.occDate) {
+      const nowComplete = !t.is_complete;
+      // optimistic: adjust completions locally
+      setCompletions((prev) =>
+        nowComplete
+          ? [...prev, { id: `tmp-${t.templateId}-${t.occDate}`, task_id: t.templateId!, occurrence_date: t.occDate!, completed_at: new Date().toISOString() }]
+          : prev.filter((c) => !(c.task_id === t.templateId && c.occurrence_date === t.occDate))
+      );
+      try {
+        if (nowComplete) await completeOccurrence(t.templateId, t.occDate);
+        else await uncompleteOccurrence(t.templateId, t.occDate);
+        reload();
+      } catch {
+        reload();
+      }
+      return;
+    }
+    // Non-recurring: flip the task's own flag.
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, is_complete: !x.is_complete } : x)));
     try {
       await setTaskComplete(t.id, !t.is_complete);
@@ -243,7 +288,7 @@ export default function AppShell() {
                   <AgendaView
                     tasks={timelineTasks}
                     groupsById={groupsById}
-                    checklistCounts={checklistCounts}
+                    checklistCounts={displayChecklistCounts}
                     onEdit={openEdit}
                     onToggleComplete={toggleComplete}
                   />
@@ -256,7 +301,7 @@ export default function AppShell() {
             <UpcomingView
               tasks={activeTasks}
               groupsById={groupsById}
-              checklistCounts={checklistCounts}
+              checklistCounts={displayChecklistCounts}
               windowDays={settings?.upcoming_window_days ?? 14}
               onChangeWindow={changeWindow}
               onEdit={openEdit}

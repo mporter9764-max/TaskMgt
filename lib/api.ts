@@ -6,6 +6,7 @@ import type {
   Settings,
   TaskDraft,
   ChecklistDraft,
+  OccurrenceCompletion,
 } from "./types";
 
 // ---- Groups ---------------------------------------------------------------
@@ -41,6 +42,13 @@ export async function deleteGroup(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Persist a new top-to-bottom order by rewriting sort_order for each group. */
+export async function reorderGroups(orderedIds: string[]): Promise<void> {
+  await Promise.all(
+    orderedIds.map((id, i) => supabase.from("groups").update({ sort_order: i + 1 }).eq("id", id))
+  );
+}
+
 // ---- Tasks ----------------------------------------------------------------
 
 export async function fetchTasks(): Promise<Task[]> {
@@ -62,6 +70,7 @@ export async function createTask(draft: TaskDraft): Promise<Task> {
       start_date: draft.start_date,
       end_date: draft.end_date,
       reminder_date: draft.reminder_date,
+      recurrence: draft.recurrence,
     })
     .select()
     .single();
@@ -79,6 +88,7 @@ export async function updateTask(id: string, draft: TaskDraft): Promise<Task> {
       start_date: draft.start_date,
       end_date: draft.end_date,
       reminder_date: draft.reminder_date,
+      recurrence: draft.recurrence,
     })
     .eq("id", id)
     .select()
@@ -93,6 +103,35 @@ export async function setTaskComplete(id: string, complete: boolean): Promise<vo
     .from("tasks")
     .update({ is_complete: complete })
     .eq("id", id);
+  if (error) throw error;
+}
+
+// ---- Recurring occurrence completions -------------------------------------
+
+export async function fetchOccurrenceCompletions(): Promise<OccurrenceCompletion[]> {
+  const { data, error } = await supabase.from("occurrence_completions").select("*");
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Mark a single occurrence of a recurring task complete. */
+export async function completeOccurrence(taskId: string, occurrenceDate: string): Promise<void> {
+  const { error } = await supabase
+    .from("occurrence_completions")
+    .upsert(
+      { task_id: taskId, occurrence_date: occurrenceDate },
+      { onConflict: "task_id,occurrence_date" }
+    );
+  if (error) throw error;
+}
+
+/** Restore (un-complete) a single occurrence. */
+export async function uncompleteOccurrence(taskId: string, occurrenceDate: string): Promise<void> {
+  const { error } = await supabase
+    .from("occurrence_completions")
+    .delete()
+    .eq("task_id", taskId)
+    .eq("occurrence_date", occurrenceDate);
   if (error) throw error;
 }
 

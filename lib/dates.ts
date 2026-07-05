@@ -65,6 +65,32 @@ export function monthDay(s: string): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
+const MONTHS_FULL = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** 'Jul' */
+export function monthShort(s: string): string {
+  return MONTHS[parseYMD(s).getMonth()];
+}
+
+/** 'July' — full month name. */
+export function monthName(s: string): string {
+  return MONTHS_FULL[parseYMD(s).getMonth()];
+}
+
+/** 'Jul 2026' — month + year, handy when a range crosses years. */
+export function monthYear(s: string): string {
+  const d = parseYMD(s);
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/** True when this date is the 1st of its month. */
+export function isMonthStart(s: string): boolean {
+  return parseYMD(s).getDate() === 1;
+}
+
 /** 'Wed · Jul 8' */
 export function longLabel(s: string): string {
   return `${weekday(s)} · ${monthDay(s)}`;
