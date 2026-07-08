@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Group, Task, DisplayTask, ChecklistItem, Settings, OccurrenceCompletion } from "@/lib/types";
+import type { Group, Task, DisplayTask, ChecklistItem, Settings, OccurrenceCompletion, Note, NoteTag } from "@/lib/types";
 import { isConfigured } from "@/lib/supabase";
 import {
   fetchGroups,
@@ -13,6 +13,8 @@ import {
   completeOccurrence,
   uncompleteOccurrence,
   updateWindowDays,
+  fetchNotes,
+  fetchNoteTags,
 } from "@/lib/api";
 import { expandTasks } from "@/lib/recurrence";
 import { todayStr } from "@/lib/dates";
@@ -21,12 +23,15 @@ import { AgendaView } from "./AgendaView";
 import { SwimlaneView } from "./SwimlaneView";
 import { UpcomingView } from "./UpcomingView";
 import { CompletedView } from "./CompletedView";
+import { NotesView } from "./NotesView";
+import { NoteEditor } from "./NoteEditor";
+import { NoteTagManager } from "./NoteTagManager";
 import { TaskEditor } from "./TaskEditor";
 import { GroupManager } from "./GroupManager";
 import { Button, IconButton } from "./ui";
 import { Plus, Cog, Target } from "./icons";
 
-type Tab = "timeline" | "upcoming" | "completed";
+type Tab = "timeline" | "upcoming" | "completed" | "notes";
 
 function useIsDesktop() {
   const [d, setD] = useState(false);
@@ -48,6 +53,8 @@ export default function AppShell() {
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [completions, setCompletions] = useState<OccurrenceCompletion[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteTags, setNoteTags] = useState<NoteTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,23 +62,32 @@ export default function AppShell() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTask, setEditorTask] = useState<Task | null>(null);
   const [newTaskGroupId, setNewTaskGroupId] = useState<string | undefined>(undefined);
+  const [newTaskTitle, setNewTaskTitle] = useState<string | undefined>(undefined);
   const [groupMgrOpen, setGroupMgrOpen] = useState(false);
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
 
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
+  const [editorNote, setEditorNote] = useState<Note | null>(null);
+  const [noteTagMgrOpen, setNoteTagMgrOpen] = useState(false);
+
   const reload = useCallback(async () => {
     try {
-      const [g, t, s, c, oc] = await Promise.all([
+      const [g, t, s, c, oc, n, nt] = await Promise.all([
         fetchGroups(),
         fetchTasks(),
         fetchSettings(),
         fetchAllChecklistItems(),
         fetchOccurrenceCompletions(),
+        fetchNotes(),
+        fetchNoteTags(),
       ]);
       setGroups(g);
       setTasks(t);
       setSettings(s);
       setChecklistItems(c);
       setCompletions(oc);
+      setNotes(n);
+      setNoteTags(nt);
       setError(null);
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load your data.");
@@ -133,9 +149,10 @@ export default function AppShell() {
     [activeTasks, hiddenGroups]
   );
 
-  const openNew = (groupId?: string) => {
+  const openNew = (groupId?: string, title?: string) => {
     setEditorTask(null);
     setNewTaskGroupId(groupId);
+    setNewTaskTitle(title);
     setEditorOpen(true);
   };
   const openEdit = (t: DisplayTask) => {
@@ -187,6 +204,18 @@ export default function AppShell() {
     });
   };
 
+  const openNewNote = () => {
+    setEditorNote(null);
+    setNoteEditorOpen(true);
+  };
+  const openEditNote = (n: Note) => {
+    setEditorNote(n);
+    setNoteEditorOpen(true);
+  };
+  const sendSnippetToTask = (title: string) => {
+    openNew(undefined, title);
+  };
+
   if (!isConfigured) return <SetupScreen />;
 
   return (
@@ -195,15 +224,25 @@ export default function AppShell() {
       <header className="flex-none border-b border-line bg-surface/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold tracking-tight">Timeline</span>
+            <span className="text-base font-semibold tracking-tight">{tab === "notes" ? "Notes" : "Timeline"}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <IconButton label="Manage groups" onClick={() => setGroupMgrOpen(true)}>
-              <Cog />
-            </IconButton>
-            <Button size="sm" onClick={() => openNew()} className="hidden sm:inline-flex">
+            {tab === "notes" ? (
+              <IconButton label="Manage tags" onClick={() => setNoteTagMgrOpen(true)}>
+                <Cog />
+              </IconButton>
+            ) : (
+              <IconButton label="Manage groups" onClick={() => setGroupMgrOpen(true)}>
+                <Cog />
+              </IconButton>
+            )}
+            <Button
+              size="sm"
+              onClick={() => (tab === "notes" ? openNewNote() : openNew())}
+              className="hidden sm:inline-flex"
+            >
               <Plus width={16} height={16} />
-              New task
+              {tab === "notes" ? "New note" : "New task"}
             </Button>
           </div>
         </div>
@@ -211,7 +250,7 @@ export default function AppShell() {
         {/* Tabs */}
         <div className="mx-auto max-w-5xl px-4">
           <nav className="flex gap-1 pb-1.5">
-            {(["timeline", "upcoming", "completed"] as Tab[]).map((t) => (
+            {(["timeline", "upcoming", "completed", "notes"] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -310,7 +349,7 @@ export default function AppShell() {
               onToggleComplete={toggleComplete}
             />
           </div>
-        ) : (
+        ) : tab === "completed" ? (
           <div className="h-full overflow-y-auto">
             <CompletedView
               tasks={completedTasks}
@@ -319,12 +358,22 @@ export default function AppShell() {
               onEdit={openEdit}
             />
           </div>
+        ) : (
+          <div className="h-full overflow-y-auto">
+            <NotesView
+              notes={notes}
+              noteTags={noteTags}
+              onOpenNote={openEditNote}
+              onManageTags={() => setNoteTagMgrOpen(true)}
+              onSendToTask={sendSnippetToTask}
+            />
+          </div>
         )}
 
         {/* Mobile FAB */}
         <button
-          onClick={() => openNew()}
-          aria-label="New task"
+          onClick={() => (tab === "notes" ? openNewNote() : openNew())}
+          aria-label={tab === "notes" ? "New note" : "New task"}
           className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-pop transition-transform hover:scale-105 sm:hidden"
         >
           <Plus width={24} height={24} />
@@ -336,6 +385,7 @@ export default function AppShell() {
         task={editorTask}
         groups={groups}
         defaultGroupId={newTaskGroupId}
+        defaultTitle={newTaskTitle}
         onClose={() => setEditorOpen(false)}
         onSaved={reload}
       />
@@ -344,6 +394,19 @@ export default function AppShell() {
         groups={groups}
         taskCountByGroup={taskCountByGroup}
         onClose={() => setGroupMgrOpen(false)}
+        onChanged={reload}
+      />
+      <NoteEditor
+        open={noteEditorOpen}
+        note={editorNote}
+        noteTags={noteTags}
+        onClose={() => setNoteEditorOpen(false)}
+        onSaved={reload}
+      />
+      <NoteTagManager
+        open={noteTagMgrOpen}
+        tags={noteTags}
+        onClose={() => setNoteTagMgrOpen(false)}
         onChanged={reload}
       />
     </div>

@@ -18,6 +18,7 @@ export function TaskEditor({
   task,
   groups,
   defaultGroupId,
+  defaultTitle,
   onClose,
   onSaved,
 }: {
@@ -25,6 +26,7 @@ export function TaskEditor({
   task: Task | null; // null => creating
   groups: Group[];
   defaultGroupId?: string;
+  defaultTitle?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -60,7 +62,7 @@ export function TaskEditor({
         )
         .catch(() => setChecklist([]));
     } else {
-      setTitle("");
+      setTitle(defaultTitle ?? "");
       setGroupId(defaultGroupId ?? groups[0]?.id ?? "");
       setStartDate(todayStr());
       setEndDate("");
@@ -70,7 +72,7 @@ export function TaskEditor({
       setChecklist([]);
     }
     setNewItem("");
-  }, [open, task, defaultGroupId, groups]);
+  }, [open, task, defaultGroupId, defaultTitle, groups]);
 
   function addChecklistItem() {
     const label = newItem.trim();

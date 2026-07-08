@@ -67,3 +67,21 @@ export const Undo = (p: P) => (
 export const Repeat = (p: P) => (
   <svg {...base} {...p}><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></svg>
 );
+export const Search = (p: P) => (
+  <svg {...base} {...p}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+);
+export const StickyNote = (p: P) => (
+  <svg {...base} {...p}><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10.5a2.5 2.5 0 0 0 2.5-2.5V8.5L15.5 3Z" /><path d="M15 3v5a1 1 0 0 0 1 1h5" /></svg>
+);
+export const Hash = (p: P) => (
+  <svg {...base} {...p}><path d="M5 9h14M5 15h14M11 4 8 20M16 4l-3 16" /></svg>
+);
+export const Eye = (p: P) => (
+  <svg {...base} {...p}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+);
+export const EditIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z" /></svg>
+);
+export const Send = (p: P) => (
+  <svg {...base} {...p}><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+);

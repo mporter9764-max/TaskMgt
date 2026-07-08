@@ -7,7 +7,11 @@ import type {
   TaskDraft,
   ChecklistDraft,
   OccurrenceCompletion,
+  Note,
+  NoteTag,
+  NoteDraft,
 } from "./types";
+import { PASTEL_PALETTE } from "./colors";
 
 // ---- Groups ---------------------------------------------------------------
 
@@ -205,4 +209,96 @@ export async function updateWindowDays(days: number): Promise<void> {
     .update({ upcoming_window_days: days })
     .eq("id", true);
   if (error) throw error;
+}
+
+// ---- Notes ------------------------------------------------------------
+
+export async function fetchNotes(): Promise<Note[]> {
+  const { data, error } = await supabase
+    .from("notes")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function createNote(draft: NoteDraft): Promise<Note> {
+  const { data, error } = await supabase
+    .from("notes")
+    .insert({ title: draft.title, content: draft.content })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateNote(id: string, draft: NoteDraft): Promise<Note> {
+  const { data, error } = await supabase
+    .from("notes")
+    .update({ title: draft.title, content: draft.content })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const { error } = await supabase.from("notes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---- Note tags (a small color registry, auto-populated as you type #tags) --
+
+export async function fetchNoteTags(): Promise<NoteTag[]> {
+  const { data, error } = await supabase
+    .from("note_tags")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateNoteTag(
+  id: string,
+  patch: Partial<Pick<NoteTag, "name" | "color" | "sort_order">>
+): Promise<void> {
+  const { error } = await supabase.from("note_tags").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteNoteTag(id: string): Promise<void> {
+  const { error } = await supabase.from("note_tags").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function reorderNoteTags(orderedIds: string[]): Promise<void> {
+  await Promise.all(
+    orderedIds.map((id, i) => supabase.from("note_tags").update({ sort_order: i + 1 }).eq("id", id))
+  );
+}
+
+/**
+ * Make sure every tag name in `names` exists in the registry, auto-creating
+ * any that are new (cycling through the pastel palette for their color).
+ * Safe to call on every note save — existing tags are left untouched.
+ */
+export async function ensureNoteTagsExist(names: string[], existing: NoteTag[]): Promise<NoteTag[]> {
+  const existingNames = new Set(existing.map((t) => t.name.toLowerCase()));
+  const toCreate = names.filter((n) => !existingNames.has(n.toLowerCase()));
+  if (toCreate.length === 0) return existing;
+
+  const startIdx = existing.length;
+  const rows = toCreate.map((n, i) => ({
+    name: n.toLowerCase(),
+    color: PASTEL_PALETTE[(startIdx + i) % PASTEL_PALETTE.length],
+    sort_order: startIdx + i + 1,
+  }));
+
+  const { data, error } = await supabase
+    .from("note_tags")
+    .upsert(rows, { onConflict: "name", ignoreDuplicates: true })
+    .select();
+  if (error) throw error;
+  return [...existing, ...(data ?? [])];
 }

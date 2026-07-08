@@ -71,3 +71,28 @@ export type ChecklistDraft = {
   label: string;
   is_checked: boolean;
 };
+
+// ---- Notes ------------------------------------------------------------
+
+export type Note = {
+  id: string;
+  title: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NoteTag = {
+  id: string;
+  name: string; // lowercase, no leading '#'
+  color: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type NoteDraft = {
+  id?: string;
+  title: string | null;
+  content: string;
+};
+
