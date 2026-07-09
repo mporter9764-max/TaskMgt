@@ -211,9 +211,13 @@ export function NotesView({
             <EmptyState title="All caught up" hint="Everything matching your filters is marked done." />
           ) : (
             <div className="space-y-5">
-              {Array.from(snippetsByTag.entries()).map(([tag, snippets]) => {
-                const color = colorByTag.get(tag) ?? "#E7E9EE";
-                return (
+              {noteTags
+                .filter((t) => snippetsByTag.has(t.name))
+                .map((t) => {
+                  const tag = t.name;
+                  const snippets = snippetsByTag.get(tag)!;
+                  const color = t.color;
+                  return (
                   <div key={tag}>
                     <div className="mb-2 flex items-center gap-2">
                       <span

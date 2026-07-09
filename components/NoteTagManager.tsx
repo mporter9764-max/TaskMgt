@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { NoteTag } from "@/lib/types";
 import { updateNoteTag, deleteNoteTag, reorderNoteTags } from "@/lib/api";
-import { PASTEL_PALETTE, deepen } from "@/lib/colors";
+import { NOTE_TAG_PALETTE, deepen } from "@/lib/colors";
 import { Modal, Button } from "./ui";
 import { Trash, Check, ChevronUp, ChevronDown } from "./icons";
 
@@ -130,7 +130,7 @@ export function NoteTagManager({
 function ColorDots({ value, onPick }: { value: string; onPick: (c: string) => void }) {
   return (
     <div className="flex flex-none flex-wrap items-center gap-1">
-      {PASTEL_PALETTE.slice(0, 8).map((c) => {
+      {NOTE_TAG_PALETTE.map((c) => {
         const active = c.toLowerCase() === value.toLowerCase();
         return (
           <button

@@ -13,7 +13,7 @@ import {
   parseYMD,
   monthName,
 } from "@/lib/dates";
-import { tint, deepen } from "@/lib/colors";
+import { tint, deepen, solidTint } from "@/lib/colors";
 import { Plus } from "./icons";
 
 const DAY_W = 46;
@@ -129,7 +129,7 @@ export function SwimlaneView({
               {/* Sticky group label */}
               <div
                 className="group/label sticky left-0 z-10 flex-none px-3 py-2"
-                style={{ width: LABEL_W, backgroundColor: tint(group.color, 0.22) }}
+                style={{ width: LABEL_W, backgroundColor: solidTint(group.color) }}
               >
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: deepen(group.color) }} />

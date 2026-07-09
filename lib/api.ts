@@ -12,7 +12,7 @@ import type {
   NoteDraft,
   NoteSnippetCompletion,
 } from "./types";
-import { PASTEL_PALETTE } from "./colors";
+import { PASTEL_PALETTE, NOTE_TAG_PALETTE } from "./colors";
 
 // ---- Groups ---------------------------------------------------------------
 
@@ -292,7 +292,7 @@ export async function ensureNoteTagsExist(names: string[], existing: NoteTag[]):
   const startIdx = existing.length;
   const rows = toCreate.map((n, i) => ({
     name: n.toLowerCase(),
-    color: PASTEL_PALETTE[(startIdx + i) % PASTEL_PALETTE.length],
+    color: NOTE_TAG_PALETTE[(startIdx + i) % NOTE_TAG_PALETTE.length],
     sort_order: startIdx + i + 1,
   }));
 
