@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Note, NoteTag } from "@/lib/types";
+import type { Note, NoteTag, NoteSnippetCompletion } from "@/lib/types";
 import { createNote, updateNote, deleteNote, ensureNoteTagsExist } from "@/lib/api";
 import { extractTagNames } from "@/lib/noteTags";
 import { Sheet, Button, Field, TextInput } from "./ui";
@@ -12,12 +12,14 @@ export function NoteEditor({
   open,
   note,
   noteTags,
+  completions,
   onClose,
   onSaved,
 }: {
   open: boolean;
   note: Note | null; // null => creating
   noteTags: NoteTag[];
+  completions: NoteSnippetCompletion[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -181,7 +183,7 @@ export function NoteEditor({
         ) : (
           <div className="min-h-[440px] rounded-lg border border-line bg-surface px-3 py-3 sm:min-h-[520px]">
             {content.trim() ? (
-              <NoteContent content={content} tags={noteTags} />
+              <NoteContent content={content} tags={noteTags} noteId={note?.id} completions={completions} />
             ) : (
               <p className="text-sm text-faint">Nothing to preview yet.</p>
             )}

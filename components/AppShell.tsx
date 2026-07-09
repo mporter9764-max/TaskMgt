@@ -432,6 +432,7 @@ export default function AppShell() {
         open={noteEditorOpen}
         note={editorNote}
         noteTags={noteTags}
+        completions={snippetCompletions}
         onClose={() => setNoteEditorOpen(false)}
         onSaved={reload}
       />

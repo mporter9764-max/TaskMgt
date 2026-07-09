@@ -1,7 +1,8 @@
 "use client";
 
-import type { NoteTag } from "@/lib/types";
+import type { NoteTag, NoteSnippetCompletion } from "@/lib/types";
 import { tint, deepen } from "@/lib/colors";
+import { extractTagNames, cleanLineText, hashString } from "@/lib/noteTags";
 
 const TAG_TOKEN = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
 const BOLD = /\*\*(.+?)\*\*/g;
@@ -58,9 +59,32 @@ function renderInline(text: string, colorByTag: Map<string, string>, keyPrefix: 
   return parts;
 }
 
-export function NoteContent({ content, tags }: { content: string; tags: NoteTag[] }) {
+export function NoteContent({
+  content,
+  tags,
+  noteId,
+  completions,
+}: {
+  content: string;
+  tags: NoteTag[];
+  noteId?: string;
+  completions?: NoteSnippetCompletion[];
+}) {
   const colorByTag = new Map(tags.map((t) => [t.name, t.color]));
   const lines = content.split("\n");
+
+  const doneKeys = new Set(
+    (noteId ? completions?.filter((c) => c.note_id === noteId) : [])?.map((c) => `${c.tag}|${c.snippet_hash}`) ?? []
+  );
+
+  /** True if this raw line carries a tag whose exact (note, tag, text) hash is marked done. */
+  function isLineDone(line: string): boolean {
+    if (!noteId || doneKeys.size === 0) return false;
+    const tagsOnLine = extractTagNames(line);
+    if (tagsOnLine.length === 0) return false;
+    const cleaned = cleanLineText(line);
+    return tagsOnLine.some((tag) => doneKeys.has(`${tag}|${hashString(`${noteId}|${tag}|${cleaned}`)}`));
+  }
 
   const blocks: React.ReactNode[] = [];
   let listBuffer: { ordered: boolean; items: string[] } | null = null;
@@ -71,11 +95,14 @@ export function NoteContent({ content, tags }: { content: string; tags: NoteTag[
     const Tag = listBuffer.ordered ? "ol" : "ul";
     blocks.push(
       <Tag key={`list-${key++}`} className={listBuffer.ordered ? "list-decimal pl-5 space-y-0.5" : "list-disc pl-5 space-y-0.5"}>
-        {listBuffer.items.map((item, i) => (
-          <li key={i} className="text-sm text-ink">
-            {renderInline(item, colorByTag, `li-${key}-${i}`)}
-          </li>
-        ))}
+        {listBuffer.items.map((item, i) => {
+          const done = isLineDone(item);
+          return (
+            <li key={i} className={`text-sm ${done ? "text-faint line-through" : "text-ink"}`}>
+              {renderInline(item, colorByTag, `li-${key}-${i}`)}
+            </li>
+          );
+        })}
       </Tag>
     );
     listBuffer = null;
@@ -121,9 +148,12 @@ export function NoteContent({ content, tags }: { content: string; tags: NoteTag[
     // before the word. Since both patterns already require '\s+' after the hashes, a typed
     // tag like '#followup' (no space) never matches these header patterns. Safe.
 
+    const done = isLineDone(line);
+    const doneCls = done ? "text-faint line-through" : "";
+
     if (h3) {
       blocks.push(
-        <h3 key={i} className="mt-1 text-sm font-semibold text-ink">
+        <h3 key={i} className={`mt-1 text-sm font-semibold ${done ? doneCls : "text-ink"}`}>
           {renderInline(h3[1], colorByTag, `h3-${i}`)}
         </h3>
       );
@@ -131,7 +161,7 @@ export function NoteContent({ content, tags }: { content: string; tags: NoteTag[
     }
     if (h2) {
       blocks.push(
-        <h2 key={i} className="mt-1 text-base font-semibold text-ink">
+        <h2 key={i} className={`mt-1 text-base font-semibold ${done ? doneCls : "text-ink"}`}>
           {renderInline(h2[1], colorByTag, `h2-${i}`)}
         </h2>
       );
@@ -139,7 +169,7 @@ export function NoteContent({ content, tags }: { content: string; tags: NoteTag[
     }
     if (h1) {
       blocks.push(
-        <h1 key={i} className="mt-1 text-lg font-bold text-ink">
+        <h1 key={i} className={`mt-1 text-lg font-bold ${done ? doneCls : "text-ink"}`}>
           {renderInline(h1[1], colorByTag, `h1-${i}`)}
         </h1>
       );
@@ -147,7 +177,7 @@ export function NoteContent({ content, tags }: { content: string; tags: NoteTag[
     }
 
     blocks.push(
-      <p key={i} className="text-sm leading-relaxed text-ink">
+      <p key={i} className={`text-sm leading-relaxed ${done ? doneCls : "text-ink"}`}>
         {renderInline(line, colorByTag, `p-${i}`)}
       </p>
     );

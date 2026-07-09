@@ -25,6 +25,13 @@ export function extractTagNames(content: string): string[] {
   return Array.from(seen);
 }
 
+/** Strip tag tokens from a line and collapse extra whitespace — the exact
+ * cleaning used both when a completion's hash was created and whenever we
+ * later check if a rendered line matches that completion. */
+export function cleanLineText(line: string): string {
+  return line.replace(new RegExp(TAG_PATTERN, "g"), "").replace(/\s{2,}/g, " ").trim();
+}
+
 export type TaggedSnippet = {
   noteId: string;
   noteTitle: string;
@@ -48,7 +55,7 @@ export function extractTaggedSnippets(note: Note): TaggedSnippet[] {
   for (const line of lines) {
     const tags = extractTagNames(line);
     if (tags.length === 0) continue;
-    const cleaned = line.replace(new RegExp(TAG_PATTERN, "g"), "").replace(/\s{2,}/g, " ").trim();
+    const cleaned = cleanLineText(line);
     for (const tag of tags) {
       out.push({
         noteId: note.id,
