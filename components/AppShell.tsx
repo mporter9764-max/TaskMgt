@@ -435,6 +435,8 @@ export default function AppShell() {
         completions={snippetCompletions}
         onClose={() => setNoteEditorOpen(false)}
         onSaved={reload}
+        onCompleteSnippet={markSnippetDone}
+        onUncompleteSnippet={markSnippetNotDone}
       />
       <NoteTagManager
         open={noteTagMgrOpen}

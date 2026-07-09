@@ -5,8 +5,9 @@ import type { Note, NoteTag, NoteSnippetCompletion } from "@/lib/types";
 import { extractTagNames, extractTaggedSnippets, previewText } from "@/lib/noteTags";
 import { monthDay } from "@/lib/dates";
 import { tint, deepen } from "@/lib/colors";
-import { EmptyState, Button, IconButton, TextInput } from "./ui";
-import { Search, Cog, Send, Hash, Check, Undo } from "./icons";
+import { EmptyState, IconButton, TextInput } from "./ui";
+import { Search, Cog, Hash } from "./icons";
+import { TaggedSnippetRow } from "./TaggedSnippetRow";
 
 type ViewMode = "notes" | "review";
 
@@ -232,36 +233,18 @@ export function NotesView({
                       {snippets.map((s, i) => {
                         const done = doneSet.has(`${s.noteId}|${s.tag}|${s.hash}`);
                         return (
-                          <div
+                          <TaggedSnippetRow
                             key={i}
-                            className={`flex items-start gap-2 rounded-xl2 border border-line bg-surface p-3 shadow-card ${
-                              done ? "opacity-60" : ""
-                            }`}
-                          >
-                            <button
-                              aria-label={done ? "Mark not done" : "Mark done"}
-                              onClick={() =>
-                                done
-                                  ? onUncompleteSnippet(s.noteId, s.tag, s.hash)
-                                  : onCompleteSnippet(s.noteId, s.tag, s.hash)
-                              }
-                              className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border transition-colors ${
-                                done ? "border-accent bg-accent text-white" : "border-faint text-transparent hover:border-accent"
-                              }`}
-                            >
-                              <Check width={12} height={12} />
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm ${done ? "text-faint line-through" : "text-ink"}`}>{s.text}</p>
-                              <p className="mt-1 text-xs text-faint">{s.noteTitle} · {monthDay(s.updatedAt.slice(0, 10))}</p>
-                            </div>
-                            {!done && (
-                              <Button variant="ghost" size="sm" onClick={() => onSendToTask(s.text)} className="flex-none">
-                                <Send width={13} height={13} />
-                                Task
-                              </Button>
-                            )}
-                          </div>
+                            text={s.text}
+                            subtitle={`${s.noteTitle} · ${monthDay(s.updatedAt.slice(0, 10))}`}
+                            done={done}
+                            onToggleDone={() =>
+                              done
+                                ? onUncompleteSnippet(s.noteId, s.tag, s.hash)
+                                : onCompleteSnippet(s.noteId, s.tag, s.hash)
+                            }
+                            onSendToTask={() => onSendToTask(s.text)}
+                          />
                         );
                       })}
                     </div>

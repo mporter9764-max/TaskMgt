@@ -5,7 +5,7 @@ import type { NoteTag } from "@/lib/types";
 import { updateNoteTag, deleteNoteTag, reorderNoteTags } from "@/lib/api";
 import { NOTE_TAG_PALETTE, deepen } from "@/lib/colors";
 import { Modal, Button } from "./ui";
-import { Trash, Check, ChevronUp, ChevronDown } from "./icons";
+import { Trash, Check, ChevronUp, ChevronDown, Star, ChevronsUp } from "./icons";
 
 export function NoteTagManager({
   open,
@@ -35,6 +35,30 @@ export function NoteTagManager({
     } catch (e: any) {
       setOrder(order);
       setErr(e?.message ?? "Couldn't save the new order.");
+    }
+  }
+
+  async function moveToTop(index: number) {
+    if (index === 0) return;
+    const next = [...order];
+    const [item] = next.splice(index, 1);
+    next.unshift(item);
+    setOrder(next);
+    try {
+      await reorderNoteTags(next.map((t) => t.id));
+      onChanged();
+    } catch (e: any) {
+      setOrder(order);
+      setErr(e?.message ?? "Couldn't save the new order.");
+    }
+  }
+
+  async function toggleRecap(t: NoteTag) {
+    try {
+      await updateNoteTag(t.id, { show_in_recap: !t.show_in_recap });
+      onChanged();
+    } catch (e: any) {
+      setErr(e?.message ?? "Couldn't update that tag.");
     }
   }
 
@@ -75,6 +99,10 @@ export function NoteTagManager({
           Tags are created automatically the first time you type <code className="rounded bg-black/[0.06] px-1">#tagname</code> in a
           note. Removing one here only stops it from being tracked and colored — it won't touch your notes' text.
         </p>
+        <p className="text-xs text-muted">
+          Tap the <Star width={11} height={11} className="inline-block align-text-bottom text-faint" /> star to show that tag's
+          items in a recap section at the bottom of every note — handy for things like your action items.
+        </p>
 
         {order.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-sm text-muted">
@@ -84,7 +112,7 @@ export function NoteTagManager({
           <div className="space-y-2">
             {order.map((t, i) => (
               <div key={t.id} className="flex items-center gap-2 rounded-lg border border-line p-2">
-                <div className="flex flex-none flex-col">
+                <div className="flex flex-none flex-col items-center">
                   <button
                     aria-label={`Move #${t.name} up`}
                     disabled={i === 0}
@@ -102,6 +130,26 @@ export function NoteTagManager({
                     <ChevronDown width={13} height={13} />
                   </button>
                 </div>
+                {i > 1 && (
+                  <button
+                    aria-label={`Move #${t.name} to top`}
+                    title="Move to top"
+                    onClick={() => moveToTop(i)}
+                    className="flex h-6 w-5 flex-none items-center justify-center rounded text-faint hover:bg-black/[0.05] hover:text-ink"
+                  >
+                    <ChevronsUp width={13} height={13} />
+                  </button>
+                )}
+                <button
+                  aria-label={t.show_in_recap ? `Remove #${t.name} from note recap` : `Show #${t.name} in note recap`}
+                  title={t.show_in_recap ? "Shown in note recap" : "Show in note recap"}
+                  onClick={() => toggleRecap(t)}
+                  className={`flex h-6 w-6 flex-none items-center justify-center rounded transition-colors ${
+                    t.show_in_recap ? "text-amber-500" : "text-faint hover:text-ink"
+                  }`}
+                >
+                  <Star width={14} height={14} fill={t.show_in_recap ? "currentColor" : "none"} />
+                </button>
                 <ColorDots value={t.color} onPick={(c) => recolor(t, c)} />
                 <span className="text-sm text-faint">#</span>
                 <input

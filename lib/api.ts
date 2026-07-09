@@ -262,7 +262,7 @@ export async function fetchNoteTags(): Promise<NoteTag[]> {
 
 export async function updateNoteTag(
   id: string,
-  patch: Partial<Pick<NoteTag, "name" | "color" | "sort_order">>
+  patch: Partial<Pick<NoteTag, "name" | "color" | "sort_order" | "show_in_recap">>
 ): Promise<void> {
   const { error } = await supabase.from("note_tags").update(patch).eq("id", id);
   if (error) throw error;

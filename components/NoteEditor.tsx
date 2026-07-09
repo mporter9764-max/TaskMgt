@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Note, NoteTag, NoteSnippetCompletion } from "@/lib/types";
 import { createNote, updateNote, deleteNote, ensureNoteTagsExist } from "@/lib/api";
-import { extractTagNames } from "@/lib/noteTags";
+import { extractTagNames, extractTaggedSnippets } from "@/lib/noteTags";
 import { Sheet, Button, Field, TextInput } from "./ui";
 import { Trash, Eye, EditIcon, Hash } from "./icons";
 import { NoteContent } from "./NoteContent";
+import { TaggedSnippetRow } from "./TaggedSnippetRow";
 
 export function NoteEditor({
   open,
@@ -15,6 +16,8 @@ export function NoteEditor({
   completions,
   onClose,
   onSaved,
+  onCompleteSnippet,
+  onUncompleteSnippet,
 }: {
   open: boolean;
   note: Note | null; // null => creating
@@ -22,6 +25,8 @@ export function NoteEditor({
   completions: NoteSnippetCompletion[];
   onClose: () => void;
   onSaved: () => void;
+  onCompleteSnippet: (noteId: string, tag: string, hash: string) => void;
+  onUncompleteSnippet: (noteId: string, tag: string, hash: string) => void;
 }) {
   const editing = Boolean(note);
 
@@ -134,6 +139,21 @@ export function NoteEditor({
       setBusy(false);
     }
   }
+
+  const recapTagNames = new Set(noteTags.filter((t) => t.show_in_recap).map((t) => t.name));
+  const recapSnippets =
+    note && recapTagNames.size > 0
+      ? extractTaggedSnippets({
+          id: note.id,
+          title,
+          content,
+          created_at: note.created_at,
+          updated_at: note.updated_at,
+        })
+          .filter((s) => recapTagNames.has(s.tag))
+          .reverse() // most-recently-written (further down the note) first
+      : [];
+  const doneKeys = new Set(completions.map((c) => `${c.note_id}|${c.tag}|${c.snippet_hash}`));
 
   return (
     <Sheet
@@ -273,6 +293,37 @@ export function NoteEditor({
         )}
 
         {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+
+        {/* Per-note recap — only the tags you've starred in Manage Tags, scoped to this note */}
+        {note && recapTagNames.size > 0 && (
+          <div className="mt-2 border-t border-line pt-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              {recapTagNames.size === 1 ? `#${Array.from(recapTagNames)[0]}` : "Recap"} in this note
+            </h3>
+            {recapSnippets.length === 0 ? (
+              <p className="text-sm text-faint">Nothing tagged here yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {recapSnippets.map((s, i) => {
+                  const done = doneKeys.has(`${s.noteId}|${s.tag}|${s.hash}`);
+                  return (
+                    <TaggedSnippetRow
+                      key={i}
+                      text={s.text}
+                      subtitle={`#${s.tag}`}
+                      done={done}
+                      onToggleDone={() =>
+                        done
+                          ? onUncompleteSnippet(s.noteId, s.tag, s.hash)
+                          : onCompleteSnippet(s.noteId, s.tag, s.hash)
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </Sheet>
   );

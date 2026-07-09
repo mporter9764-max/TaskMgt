@@ -103,11 +103,12 @@ create table if not exists notes (
 create index if not exists idx_notes_updated on notes(updated_at desc);
 
 create table if not exists note_tags (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null unique,   -- lowercase, no leading '#'
-  color       text not null,
-  sort_order  integer not null default 0,
-  created_at  timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null unique,   -- lowercase, no leading '#'
+  color          text not null,
+  sort_order     integer not null default 0,
+  show_in_recap  boolean not null default false,
+  created_at     timestamptz not null default now()
 );
 
 create table if not exists note_snippet_completions (

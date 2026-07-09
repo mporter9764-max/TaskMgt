@@ -87,6 +87,7 @@ export type NoteTag = {
   name: string; // lowercase, no leading '#'
   color: string;
   sort_order: number;
+  show_in_recap: boolean; // shown in the per-note recap section at the bottom of every note
   created_at: string;
 };
 
