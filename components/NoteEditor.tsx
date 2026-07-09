@@ -28,14 +28,21 @@ export function NoteEditor({
   onCompleteSnippet: (noteId: string, tag: string, hash: string) => void;
   onUncompleteSnippet: (noteId: string, tag: string, hash: string) => void;
 }) {
-  const editing = Boolean(note);
-
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [mode, setMode] = useState<"edit" | "preview">("edit");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false); // only for Delete now
   const [err, setErr] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Autosave bookkeeping. localNoteId starts as the note's id (or undefined for
+  // a brand-new note) and gets set the moment the first autosave creates it —
+  // independent of the `note` prop, which won't update until the sheet reopens.
+  const [localNoteId, setLocalNoteId] = useState<string | undefined>(note?.id);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const editing = Boolean(localNoteId);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstRunRef = useRef(true);
 
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const [newTagDraft, setNewTagDraft] = useState("");
@@ -48,6 +55,9 @@ export function NoteEditor({
     setSelection(null);
     setShowNewTagInput(false);
     setNewTagDraft("");
+    setLocalNoteId(note?.id);
+    setSaveStatus("idle");
+    firstRunRef.current = true;
     if (note) {
       setTitle(note.title ?? "");
       setContent(note.content);
@@ -56,6 +66,54 @@ export function NoteEditor({
       setContent("");
     }
   }, [open, note]);
+
+  /** Save now (create on first save, update after). Shared by the debounce
+   * timer and the close-flush, so both paths behave identically. */
+  async function flushSave(currentTitle: string, currentContent: string) {
+    if (!currentTitle.trim() && !currentContent.trim()) return; // nothing to save yet
+    setSaveStatus("saving");
+    try {
+      const draft = { title: currentTitle.trim() || null, content: currentContent };
+      const saved = localNoteId ? await updateNote(localNoteId, draft) : await createNote(draft);
+      if (!localNoteId) setLocalNoteId(saved.id);
+      const names = extractTagNames(saved.content);
+      if (names.length > 0) await ensureNoteTagsExist(names, noteTags);
+      onSaved();
+      setSaveStatus("saved");
+      setErr(null);
+    } catch (e: any) {
+      setSaveStatus("error");
+      setErr(e?.message ?? "Couldn't save just now — it'll retry as you keep typing.");
+    }
+  }
+
+  // Debounced autosave: 800ms after the last change to title/content.
+  useEffect(() => {
+    if (!open) return;
+    if (firstRunRef.current) {
+      firstRunRef.current = false; // skip the run caused by loading the note in
+      return;
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      flushSave(title, content);
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, content]);
+
+  /** Close the sheet, flushing any pending edit first so nothing typed in the
+   * last moment before closing gets lost. */
+  async function handleClose() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    await flushSave(title, content);
+    onClose();
+  }
 
   function trackSelection() {
     const el = textareaRef.current;
@@ -67,6 +125,46 @@ export function NoteEditor({
     } else {
       setSelection(null);
     }
+  }
+
+  function wrapSelectionWithMarkup(before: string, after: string) {
+    const el = textareaRef.current;
+    const start = selection?.start ?? el?.selectionStart ?? content.length;
+    const end = selection?.end ?? el?.selectionEnd ?? content.length;
+    const selected = content.slice(start, end);
+    const next = content.slice(0, start) + before + selected + after + content.slice(end);
+    setContent(next);
+    setSelection(null);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = selected ? start + before.length + selected.length + after.length : start + before.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  /** Toggle a prefix (like '# ' or '- ') on the current line, so tapping the
+   * same button again removes it. */
+  function toggleLinePrefix(prefix: string) {
+    const el = textareaRef.current;
+    if (!el) return;
+    const pos = el.selectionStart ?? content.length;
+    const lineStart = content.lastIndexOf("\n", pos - 1) + 1;
+    const already = content.slice(lineStart, lineStart + prefix.length) === prefix;
+    let next: string;
+    let newPos: number;
+    if (already) {
+      next = content.slice(0, lineStart) + content.slice(lineStart + prefix.length);
+      newPos = Math.max(lineStart, pos - prefix.length);
+    } else {
+      next = content.slice(0, lineStart) + prefix + content.slice(lineStart);
+      newPos = pos + prefix.length;
+    }
+    setContent(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(newPos, newPos);
+    });
   }
 
   function wrapSelectionWithTag(tagName: string) {
@@ -107,30 +205,16 @@ export function NoteEditor({
     });
   }
 
-  async function handleSave() {
-    if (!content.trim()) return setErr("Write something before saving — or delete this note instead.");
-    setBusy(true);
-    setErr(null);
-    try {
-      const draft = { title: title.trim() || null, content };
-      const saved = note ? await updateNote(note.id, draft) : await createNote(draft);
-      const names = extractTagNames(saved.content);
-      if (names.length > 0) await ensureNoteTagsExist(names, noteTags);
-      onSaved();
-      onClose();
-    } catch (e: any) {
-      setErr(e?.message ?? "Something went wrong saving.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleDelete() {
-    if (!note) return;
+    if (!localNoteId) return;
     if (!window.confirm("Delete this note permanently? This can't be undone.")) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
     setBusy(true);
     try {
-      await deleteNote(note.id);
+      await deleteNote(localNoteId);
       onSaved();
       onClose();
     } catch (e: any) {
@@ -142,13 +226,13 @@ export function NoteEditor({
 
   const recapTagNames = new Set(noteTags.filter((t) => t.show_in_recap).map((t) => t.name));
   const recapSnippets =
-    note && recapTagNames.size > 0
+    localNoteId && recapTagNames.size > 0
       ? extractTaggedSnippets({
-          id: note.id,
+          id: localNoteId,
           title,
           content,
-          created_at: note.created_at,
-          updated_at: note.updated_at,
+          created_at: note?.created_at ?? new Date().toISOString(),
+          updated_at: note?.updated_at ?? new Date().toISOString(),
         })
           .filter((s) => recapTagNames.has(s.tag))
           .reverse() // most-recently-written (further down the note) first
@@ -158,7 +242,7 @@ export function NoteEditor({
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={editing ? "Edit note" : "New note"}
       widthClassName="sm:w-[560px] lg:w-[720px] xl:w-[840px]"
       footer={
@@ -171,12 +255,14 @@ export function NoteEditor({
           ) : (
             <span />
           )}
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={busy}>
-              {busy ? "Saving…" : editing ? "Save changes" : "Save note"}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-faint">
+              {saveStatus === "saving" && "Saving…"}
+              {saveStatus === "saved" && "Saved"}
+              {saveStatus === "error" && "Couldn't save"}
+            </span>
+            <Button size="sm" onClick={handleClose} disabled={busy}>
+              Done
             </Button>
           </div>
         </>
@@ -267,6 +353,41 @@ export function NoteEditor({
 
         {mode === "edit" ? (
           <div>
+            <div className="mb-1.5 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => wrapSelectionWithMarkup("**", "**")}
+                title="Bold"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-sm font-bold text-ink hover:bg-black/[0.06]"
+              >
+                B
+              </button>
+              <button
+                type="button"
+                onClick={() => wrapSelectionWithMarkup("*", "*")}
+                title="Italic"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-sm italic text-ink hover:bg-black/[0.06]"
+              >
+                I
+              </button>
+              <div className="mx-1 h-4 w-px bg-line" />
+              <button
+                type="button"
+                onClick={() => toggleLinePrefix("# ")}
+                title="Header"
+                className="flex h-7 items-center justify-center rounded-md px-2 text-xs font-semibold text-ink hover:bg-black/[0.06]"
+              >
+                Header
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleLinePrefix("- ")}
+                title="Bullet list"
+                className="flex h-7 items-center justify-center rounded-md px-2 text-sm text-ink hover:bg-black/[0.06]"
+              >
+                • List
+              </button>
+            </div>
             <textarea
               ref={textareaRef}
               value={content}
@@ -279,13 +400,13 @@ export function NoteEditor({
               className="min-h-[440px] w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm leading-relaxed text-ink placeholder:font-sans placeholder:text-faint focus:border-accent focus:outline-none sm:min-h-[520px]"
             />
             <p className="mt-1.5 text-xs text-faint">
-              Type <code className="rounded bg-black/[0.06] px-1">#tagname</code> to tag a line, or select text to tag just that phrase.
+              Type <code className="rounded bg-black/[0.06] px-1">#tagname</code> to tag a line, or select text to tag just that phrase. Saves automatically as you write.
             </p>
           </div>
         ) : (
           <div className="min-h-[440px] rounded-lg border border-line bg-surface px-3 py-3 sm:min-h-[520px]">
             {content.trim() ? (
-              <NoteContent content={content} tags={noteTags} noteId={note?.id} completions={completions} />
+              <NoteContent content={content} tags={noteTags} noteId={localNoteId} completions={completions} />
             ) : (
               <p className="text-sm text-faint">Nothing to preview yet.</p>
             )}
@@ -295,7 +416,7 @@ export function NoteEditor({
         {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
 
         {/* Per-note recap — only the tags you've starred in Manage Tags, scoped to this note */}
-        {note && recapTagNames.size > 0 && (
+        {localNoteId && recapTagNames.size > 0 && (
           <div className="mt-2 border-t border-line pt-3">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
               {recapTagNames.size === 1 ? `#${Array.from(recapTagNames)[0]}` : "Recap"} in this note
