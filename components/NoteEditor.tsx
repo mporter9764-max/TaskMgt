@@ -32,10 +32,17 @@ export function NoteEditor({
   const [err, setErr] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+  const [newTagDraft, setNewTagDraft] = useState("");
+  const [showNewTagInput, setShowNewTagInput] = useState(false);
+
   useEffect(() => {
     if (!open) return;
     setErr(null);
     setMode("edit");
+    setSelection(null);
+    setShowNewTagInput(false);
+    setNewTagDraft("");
     if (note) {
       setTitle(note.title ?? "");
       setContent(note.content);
@@ -44,6 +51,38 @@ export function NoteEditor({
       setContent("");
     }
   }, [open, note]);
+
+  function trackSelection() {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    if (end > start && content.slice(start, end).trim().length > 0) {
+      setSelection({ start, end });
+    } else {
+      setSelection(null);
+    }
+  }
+
+  function wrapSelectionWithTag(tagName: string) {
+    const clean = tagName.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!clean || !selection) return;
+    const { start, end } = selection;
+    const phrase = content.slice(start, end);
+    const wrapped = `[[${clean}: ${phrase}]]`;
+    const next = content.slice(0, start) + wrapped + content.slice(end);
+    setContent(next);
+    setSelection(null);
+    setShowNewTagInput(false);
+    setNewTagDraft("");
+    const el = textareaRef.current;
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = start + wrapped.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
 
   function insertTag(name: string) {
     const el = textareaRef.current;
@@ -167,17 +206,60 @@ export function NoteEditor({
           </button>
         </div>
 
+        {/* Highlight-and-tag action bar — appears only when text is selected */}
+        {mode === "edit" && selection && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/5 px-2.5 py-2">
+            <span className="text-xs font-medium text-muted">Tag selection:</span>
+            {noteTags.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => wrapSelectionWithTag(t.name)}
+                className="rounded-full px-2 py-0.5 text-xs font-medium text-ink transition-transform hover:scale-105"
+                style={{ backgroundColor: t.color }}
+              >
+                #{t.name}
+              </button>
+            ))}
+            {showNewTagInput ? (
+              <div className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={newTagDraft}
+                  onChange={(e) => setNewTagDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && wrapSelectionWithTag(newTagDraft)}
+                  placeholder="new-tag"
+                  className="w-24 rounded-full border border-line bg-surface px-2 py-0.5 text-xs focus:border-accent focus:outline-none"
+                />
+                <Button size="sm" variant="ghost" onClick={() => wrapSelectionWithTag(newTagDraft)} className="h-6 px-2 text-xs">
+                  Apply
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowNewTagInput(true)}
+                className="rounded-full border border-dashed border-faint px-2 py-0.5 text-xs font-medium text-muted hover:text-ink"
+              >
+                + new tag
+              </button>
+            )}
+          </div>
+        )}
+
         {mode === "edit" ? (
           <div>
             <textarea
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder={"Write freely. Tag anything as you go — e.g. #followup, #decision, #waiting-on-sam.\n\n# Headers, **bold**, *italic*, and - bullets are all supported."}
+              onSelect={trackSelection}
+              onMouseUp={trackSelection}
+              onTouchEnd={trackSelection}
+              onKeyUp={trackSelection}
+              placeholder={"Write freely. Tag anything as you go — e.g. #followup, #decision, #waiting-on-sam.\n\n# Headers, **bold**, *italic*, and - bullets are all supported.\n\nSelect a phrase to highlight and tag just that part."}
               className="min-h-[440px] w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm leading-relaxed text-ink placeholder:font-sans placeholder:text-faint focus:border-accent focus:outline-none sm:min-h-[520px]"
             />
             <p className="mt-1.5 text-xs text-faint">
-              Type <code className="rounded bg-black/[0.06] px-1">#tagname</code> anywhere to tag a line.
+              Type <code className="rounded bg-black/[0.06] px-1">#tagname</code> to tag a line, or select text to tag just that phrase.
             </p>
           </div>
         ) : (
