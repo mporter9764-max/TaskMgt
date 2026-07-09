@@ -110,6 +110,17 @@ create table if not exists note_tags (
   created_at  timestamptz not null default now()
 );
 
+create table if not exists note_snippet_completions (
+  id             uuid primary key default gen_random_uuid(),
+  note_id        uuid not null references notes(id) on delete cascade,
+  tag            text not null,
+  snippet_hash   text not null,
+  completed_at   timestamptz not null default now(),
+  unique (note_id, tag, snippet_hash)
+);
+
+create index if not exists idx_note_snippet_note on note_snippet_completions(note_id);
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -173,6 +184,7 @@ alter table checklist_items enable row level security;
 alter table occurrence_completions enable row level security;
 alter table notes           enable row level security;
 alter table note_tags       enable row level security;
+alter table note_snippet_completions enable row level security;
 alter table settings        enable row level security;
 
 drop policy if exists "public all" on groups;
@@ -197,6 +209,10 @@ create policy "public all" on notes
 
 drop policy if exists "public all" on note_tags;
 create policy "public all" on note_tags
+  for all to anon, authenticated using (true) with check (true);
+
+drop policy if exists "public all" on note_snippet_completions;
+create policy "public all" on note_snippet_completions
   for all to anon, authenticated using (true) with check (true);
 
 drop policy if exists "public all" on settings;

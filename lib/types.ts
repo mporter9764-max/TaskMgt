@@ -96,3 +96,11 @@ export type NoteDraft = {
   content: string;
 };
 
+export type NoteSnippetCompletion = {
+  id: string;
+  note_id: string;
+  tag: string;
+  snippet_hash: string;
+  completed_at: string;
+};
+

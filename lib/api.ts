@@ -10,6 +10,7 @@ import type {
   Note,
   NoteTag,
   NoteDraft,
+  NoteSnippetCompletion,
 } from "./types";
 import { PASTEL_PALETTE } from "./colors";
 
@@ -301,4 +302,32 @@ export async function ensureNoteTagsExist(names: string[], existing: NoteTag[]):
     .select();
   if (error) throw error;
   return [...existing, ...(data ?? [])];
+}
+
+// ---- Note snippet completions (mark a tagged line "done" in the review panel) --
+
+export async function fetchNoteSnippetCompletions(): Promise<NoteSnippetCompletion[]> {
+  const { data, error } = await supabase.from("note_snippet_completions").select("*");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function completeSnippet(noteId: string, tag: string, hash: string): Promise<void> {
+  const { error } = await supabase
+    .from("note_snippet_completions")
+    .upsert(
+      { note_id: noteId, tag, snippet_hash: hash },
+      { onConflict: "note_id,tag,snippet_hash" }
+    );
+  if (error) throw error;
+}
+
+export async function uncompleteSnippet(noteId: string, tag: string, hash: string): Promise<void> {
+  const { error } = await supabase
+    .from("note_snippet_completions")
+    .delete()
+    .eq("note_id", noteId)
+    .eq("tag", tag)
+    .eq("snippet_hash", hash);
+  if (error) throw error;
 }

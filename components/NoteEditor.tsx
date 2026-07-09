@@ -99,6 +99,7 @@ export function NoteEditor({
       open={open}
       onClose={onClose}
       title={editing ? "Edit note" : "New note"}
+      widthClassName="sm:w-[560px] lg:w-[720px] xl:w-[840px]"
       footer={
         <>
           {editing ? (
@@ -171,14 +172,14 @@ export function NoteEditor({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder={"Write freely. Tag anything as you go — e.g. #followup, #decision, #waiting-on-sam.\n\n# Headers, **bold**, *italic*, and - bullets are all supported."}
-              className="min-h-[280px] w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm leading-relaxed text-ink placeholder:font-sans placeholder:text-faint focus:border-accent focus:outline-none"
+              className="min-h-[440px] w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm leading-relaxed text-ink placeholder:font-sans placeholder:text-faint focus:border-accent focus:outline-none sm:min-h-[520px]"
             />
             <p className="mt-1.5 text-xs text-faint">
               Type <code className="rounded bg-black/[0.06] px-1">#tagname</code> anywhere to tag a line.
             </p>
           </div>
         ) : (
-          <div className="min-h-[280px] rounded-lg border border-line bg-surface px-3 py-3">
+          <div className="min-h-[440px] rounded-lg border border-line bg-surface px-3 py-3 sm:min-h-[520px]">
             {content.trim() ? (
               <NoteContent content={content} tags={noteTags} />
             ) : (

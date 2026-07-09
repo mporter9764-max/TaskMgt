@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Group, Task, DisplayTask, ChecklistItem, Settings, OccurrenceCompletion, Note, NoteTag } from "@/lib/types";
+import type { Group, Task, DisplayTask, ChecklistItem, Settings, OccurrenceCompletion, Note, NoteTag, NoteSnippetCompletion } from "@/lib/types";
 import { isConfigured } from "@/lib/supabase";
 import {
   fetchGroups,
@@ -15,6 +15,9 @@ import {
   updateWindowDays,
   fetchNotes,
   fetchNoteTags,
+  fetchNoteSnippetCompletions,
+  completeSnippet,
+  uncompleteSnippet,
 } from "@/lib/api";
 import { expandTasks } from "@/lib/recurrence";
 import { todayStr } from "@/lib/dates";
@@ -55,6 +58,7 @@ export default function AppShell() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteTags, setNoteTags] = useState<NoteTag[]>([]);
+  const [snippetCompletions, setSnippetCompletions] = useState<NoteSnippetCompletion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,7 +76,7 @@ export default function AppShell() {
 
   const reload = useCallback(async () => {
     try {
-      const [g, t, s, c, oc, n, nt] = await Promise.all([
+      const [g, t, s, c, oc, n, nt, sc] = await Promise.all([
         fetchGroups(),
         fetchTasks(),
         fetchSettings(),
@@ -80,6 +84,7 @@ export default function AppShell() {
         fetchOccurrenceCompletions(),
         fetchNotes(),
         fetchNoteTags(),
+        fetchNoteSnippetCompletions(),
       ]);
       setGroups(g);
       setTasks(t);
@@ -88,6 +93,7 @@ export default function AppShell() {
       setCompletions(oc);
       setNotes(n);
       setNoteTags(nt);
+      setSnippetCompletions(sc);
       setError(null);
     } catch (e: any) {
       setError(e?.message ?? "Couldn't load your data.");
@@ -214,6 +220,29 @@ export default function AppShell() {
   };
   const sendSnippetToTask = (title: string) => {
     openNew(undefined, title);
+  };
+  const markSnippetDone = async (noteId: string, tag: string, hash: string) => {
+    setSnippetCompletions((prev) => [
+      ...prev,
+      { id: `tmp-${noteId}-${tag}-${hash}`, note_id: noteId, tag, snippet_hash: hash, completed_at: new Date().toISOString() },
+    ]);
+    try {
+      await completeSnippet(noteId, tag, hash);
+      reload();
+    } catch {
+      reload();
+    }
+  };
+  const markSnippetNotDone = async (noteId: string, tag: string, hash: string) => {
+    setSnippetCompletions((prev) =>
+      prev.filter((c) => !(c.note_id === noteId && c.tag === tag && c.snippet_hash === hash))
+    );
+    try {
+      await uncompleteSnippet(noteId, tag, hash);
+      reload();
+    } catch {
+      reload();
+    }
   };
 
   if (!isConfigured) return <SetupScreen />;
@@ -363,9 +392,12 @@ export default function AppShell() {
             <NotesView
               notes={notes}
               noteTags={noteTags}
+              completions={snippetCompletions}
               onOpenNote={openEditNote}
               onManageTags={() => setNoteTagMgrOpen(true)}
               onSendToTask={sendSnippetToTask}
+              onCompleteSnippet={markSnippetDone}
+              onUncompleteSnippet={markSnippetNotDone}
             />
           </div>
         )}

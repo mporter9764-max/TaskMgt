@@ -1,31 +1,38 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Note, NoteTag } from "@/lib/types";
+import type { Note, NoteTag, NoteSnippetCompletion } from "@/lib/types";
 import { extractTagNames, extractTaggedSnippets, previewText } from "@/lib/noteTags";
 import { monthDay } from "@/lib/dates";
 import { tint, deepen } from "@/lib/colors";
 import { EmptyState, Button, IconButton, TextInput } from "./ui";
-import { Search, Cog, Send, Hash } from "./icons";
+import { Search, Cog, Send, Hash, Check, Undo } from "./icons";
 
 type ViewMode = "notes" | "review";
 
 export function NotesView({
   notes,
   noteTags,
+  completions,
   onOpenNote,
   onManageTags,
   onSendToTask,
+  onCompleteSnippet,
+  onUncompleteSnippet,
 }: {
   notes: Note[];
   noteTags: NoteTag[];
+  completions: NoteSnippetCompletion[];
   onOpenNote: (note: Note) => void;
   onManageTags: () => void;
   onSendToTask: (title: string) => void;
+  onCompleteSnippet: (noteId: string, tag: string, hash: string) => void;
+  onUncompleteSnippet: (noteId: string, tag: string, hash: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<ViewMode>("notes");
+  const [showDone, setShowDone] = useState(false);
 
   const colorByTag = useMemo(() => new Map(noteTags.map((t) => [t.name, t.color])), [noteTags]);
 
@@ -54,21 +61,33 @@ export function NotesView({
     });
   }, [notes, tagsByNote, selected, q]);
 
+  const doneSet = useMemo(
+    () => new Set(completions.map((c) => `${c.note_id}|${c.tag}|${c.snippet_hash}`)),
+    [completions]
+  );
+
   const allSnippets = useMemo(() => {
     const out = notes.flatMap((n) => extractTaggedSnippets(n));
     return out.filter((s) => (selected.size === 0 || selected.has(s.tag)) && (q === "" || s.text.toLowerCase().includes(q)));
   }, [notes, selected, q]);
 
+  const openSnippets = useMemo(
+    () => allSnippets.filter((s) => !doneSet.has(`${s.noteId}|${s.tag}|${s.hash}`)),
+    [allSnippets, doneSet]
+  );
+  const doneCount = allSnippets.length - openSnippets.length;
+  const visibleSnippets = showDone ? allSnippets : openSnippets;
+
   const snippetsByTag = useMemo(() => {
     const m = new Map<string, typeof allSnippets>();
-    for (const s of allSnippets) {
+    for (const s of visibleSnippets) {
       const arr = m.get(s.tag) ?? [];
       arr.push(s);
       m.set(s.tag, arr);
     }
     for (const arr of m.values()) arr.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return m;
-  }, [allSnippets]);
+  }, [visibleSnippets]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-4">
@@ -179,37 +198,74 @@ export function NotesView({
           />
         </div>
       ) : (
-        <div className="mt-4 space-y-5">
-          {Array.from(snippetsByTag.entries()).map(([tag, snippets]) => {
-            const color = colorByTag.get(tag) ?? "#E7E9EE";
-            return (
-              <div key={tag}>
-                <div className="mb-2 flex items-center gap-2">
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    style={{ backgroundColor: color, color: deepen(color, 0.5) }}
-                  >
-                    #{tag}
-                  </span>
-                  <span className="text-xs text-faint">{snippets.length}</span>
-                </div>
-                <div className="space-y-2">
-                  {snippets.map((s, i) => (
-                    <div key={i} className="flex items-start gap-2 rounded-xl2 border border-line bg-surface p-3 shadow-card">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-ink">{s.text}</p>
-                        <p className="mt-1 text-xs text-faint">{s.noteTitle} · {monthDay(s.updatedAt.slice(0, 10))}</p>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => onSendToTask(s.text)} className="flex-none">
-                        <Send width={13} height={13} />
-                        Task
-                      </Button>
+        <div className="mt-4">
+          {doneCount > 0 && (
+            <button
+              onClick={() => setShowDone((v) => !v)}
+              className="mb-3 text-xs font-medium text-muted hover:text-ink"
+            >
+              {showDone ? "Hide" : "Show"} {doneCount} done item{doneCount === 1 ? "" : "s"}
+            </button>
+          )}
+          {visibleSnippets.length === 0 ? (
+            <EmptyState title="All caught up" hint="Everything matching your filters is marked done." />
+          ) : (
+            <div className="space-y-5">
+              {Array.from(snippetsByTag.entries()).map(([tag, snippets]) => {
+                const color = colorByTag.get(tag) ?? "#E7E9EE";
+                return (
+                  <div key={tag}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                        style={{ backgroundColor: color, color: deepen(color, 0.5) }}
+                      >
+                        #{tag}
+                      </span>
+                      <span className="text-xs text-faint">{snippets.length}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+                    <div className="space-y-2">
+                      {snippets.map((s, i) => {
+                        const done = doneSet.has(`${s.noteId}|${s.tag}|${s.hash}`);
+                        return (
+                          <div
+                            key={i}
+                            className={`flex items-start gap-2 rounded-xl2 border border-line bg-surface p-3 shadow-card ${
+                              done ? "opacity-60" : ""
+                            }`}
+                          >
+                            <button
+                              aria-label={done ? "Mark not done" : "Mark done"}
+                              onClick={() =>
+                                done
+                                  ? onUncompleteSnippet(s.noteId, s.tag, s.hash)
+                                  : onCompleteSnippet(s.noteId, s.tag, s.hash)
+                              }
+                              className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border transition-colors ${
+                                done ? "border-accent bg-accent text-white" : "border-faint text-transparent hover:border-accent"
+                              }`}
+                            >
+                              <Check width={12} height={12} />
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm ${done ? "text-faint line-through" : "text-ink"}`}>{s.text}</p>
+                              <p className="mt-1 text-xs text-faint">{s.noteTitle} · {monthDay(s.updatedAt.slice(0, 10))}</p>
+                            </div>
+                            {!done && (
+                              <Button variant="ghost" size="sm" onClick={() => onSendToTask(s.text)} className="flex-none">
+                                <Send width={13} height={13} />
+                                Task
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

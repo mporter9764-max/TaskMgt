@@ -92,12 +92,14 @@ export function Sheet({
   title,
   children,
   footer,
+  widthClassName = "sm:w-[440px]",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  widthClassName?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -111,8 +113,8 @@ export function Sheet({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-ink/20" onClick={onClose} />
       <div
-        className="absolute inset-x-0 bottom-0 flex max-h-[92vh] flex-col rounded-t-xl2 bg-surface shadow-pop
-                   sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[440px] sm:max-h-none sm:rounded-none sm:rounded-l-xl2"
+        className={`absolute inset-x-0 bottom-0 flex max-h-[92vh] flex-col rounded-t-xl2 bg-surface shadow-pop
+                   sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:rounded-none sm:rounded-l-xl2 ${widthClassName}`}
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 className="text-base font-semibold">{title}</h2>
