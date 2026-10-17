@@ -2,6 +2,7 @@
 
 Tasks with a timeline, notes with tagging, and a goal tracker. Next.js + Supabase + Vercel.
 
+
 ## Setup (one time)
 
 1. **Supabase:** open your TaskMgt project, go to SQL Editor, New query, paste all of `supabase/schema.sql`, click Run.
