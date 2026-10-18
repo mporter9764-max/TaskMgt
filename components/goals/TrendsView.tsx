@@ -79,7 +79,8 @@ export function TrendsView({ tree, data, today }: { tree: RoleNode[]; data: Map<
   return (
     <div className="space-y-4 pb-28">
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={scope} onChange={(e) => setScope(e.target.value)} className="w-auto min-w-[180px] flex-1 sm:flex-none">
+        <div className="min-w-[180px] flex-1 sm:w-72 sm:flex-none">
+        <Select value={scope} onChange={(e) => setScope(e.target.value)}>
           <option value="all">All goals</option>
           {tree.map((r) => (
             <optgroup key={r.role.id} label={r.role.name}>
@@ -92,6 +93,7 @@ export function TrendsView({ tree, data, today }: { tree: RoleNode[]; data: Map<
             </optgroup>
           ))}
         </Select>
+        </div>
         <Segmented<Range>
           value={range}
           onChange={setRange}
@@ -114,30 +116,33 @@ export function TrendsView({ tree, data, today }: { tree: RoleNode[]; data: Map<
         <CalendarHeatmap cells={heat} from={from} today={today} />
       </Card>
 
-      <Card
-        title="Consistency over time"
-        right={
-          <Segmented
-            size="sm"
-            value={trendMode}
-            onChange={setTrendMode}
-            options={[
-              { value: "week", label: "Weekly" },
-              { value: "month", label: "Monthly" },
-            ]}
-          />
-        }
-      >
-        <TrendLine points={trend} />
-        {trendMode === "week" && scoped.some((gd) => gd.targets.some((t) => t.period === "month")) && (
-          <p className="mt-2 text-[12px] text-faint">Monthly goals are left out of the weekly view; switch to Monthly to include them.</p>
-        )}
-      </Card>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <Card
+          title="Consistency over time"
+          right={
+            <Segmented
+              size="sm"
+              value={trendMode}
+              onChange={setTrendMode}
+              options={[
+                { value: "week", label: "Weekly" },
+                { value: "month", label: "Monthly" },
+              ]}
+            />
+          }
+        >
+          <TrendLine points={trend} />
+          {trendMode === "week" && scoped.some((gd) => gd.targets.some((t) => t.period === "month")) && (
+            <p className="mt-2 text-[12px] text-faint">Monthly goals are left out of the weekly view; switch to Monthly to include them.</p>
+          )}
+        </Card>
 
-      <Card title="By day of week">
-        <p className="-mt-1 mb-3 text-[12px] text-muted">How often goals get checked off on each weekday. The weakest day is highlighted.</p>
-        <DowBars bars={dow} />
-      </Card>
+        <Card title="By day of week">
+          <p className="-mt-1 mb-3 text-[12px] text-muted">How often goals get checked off on each weekday. The weakest day is highlighted.</p>
+          <DowBars bars={dow} />
+        </Card>
+
+      </div>
 
       <Card
         title="Goals by week"

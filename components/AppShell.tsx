@@ -72,7 +72,7 @@ export function AppShell() {
     <div className="flex min-h-dvh flex-col">
       {/* top bar */}
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+        <div className="flex h-14 w-full items-center gap-3 px-4 lg:px-6">
           <span className="text-[17px] font-semibold tracking-tight text-ink">TaskMgt</span>
           <nav className="ml-6 hidden gap-1 sm:flex">
             {TABS.map(({ id, label, Icon }) => (
@@ -93,7 +93,7 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className={cx("mx-auto w-full max-w-6xl flex-1 px-4 pt-4", tab === "tasks" && "flex min-h-0 flex-col")}>
+      <main className={cx("w-full flex-1 px-4 pt-4 lg:px-6", tab === "tasks" && "flex min-h-0 flex-col")}>
         <div className={tab === "goals" ? "" : "hidden"}>
           <GoalsView store={goals} />
         </div>

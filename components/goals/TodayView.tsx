@@ -121,7 +121,7 @@ export function TodayView({
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         {tree.map((node) => {
           const goals = node.all.filter(active);
           if (!goals.length) return null;

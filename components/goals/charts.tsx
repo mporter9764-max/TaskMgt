@@ -59,10 +59,20 @@ export function Legend() {
 export function CalendarHeatmap({ cells, from, today }: { cells: Map<string, DayCell>; from: string; today: string }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const cell = 14;
+  const [avail, setAvail] = useState(0);
   const gap = 3;
   const first = weekStart(from);
   const weeks = Math.floor(diffDays(first, weekStart(today)) / 7) + 1;
+  // grow the squares to fill wide screens (14px minimum, 26px maximum)
+  const cell = avail ? Math.max(14, Math.min(26, Math.floor((avail - 34) / weeks) - gap)) : 14;
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const el = scroller.current;
