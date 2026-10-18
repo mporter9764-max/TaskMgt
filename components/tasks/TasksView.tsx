@@ -57,14 +57,14 @@ export function TasksView({
     return out;
   }, [today]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(true);
   const [manageGroups, setManageGroups] = useState(false);
 
   useEffect(() => {
     const wide = window.innerWidth >= 900;
     setMode(readPref<Mode>("taskmgt.taskMode", wide ? "timeline" : "list"));
     setZoom(Number(readPref<string>("taskmgt.zoom", "1")) || 1);
-    setShowCompleted(readPref<string>("taskmgt.showDone", "0") === "1");
+    setShowCompleted(readPref<string>("taskmgt.showDone", "1") === "1");
   }, []);
 
   const hasUngrouped = store.tasks.some((t) => !t.group_id || !store.groups.some((g) => g.id === t.group_id));

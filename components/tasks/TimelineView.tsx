@@ -409,16 +409,16 @@ export function TimelineView({
                           width: Math.max(6, x1 - x0 - 2),
                           top: LANE_PAD + p.row * ROW_H + (ROW_H - BAR_H) / 2,
                           height: BAR_H,
-                          background: color,
-                          border: `1px solid ${deepen(color, 0.18)}`,
+                          // completed tasks stay on the timeline as gray bars
+                          background: p.occ.done ? "#ecebe6" : color,
+                          border: `1px solid ${p.occ.done ? "#d9d7d0" : deepen(color, 0.18)}`,
                           borderLeft: overdue ? "3px solid #c2410c" : undefined,
-                          opacity: p.occ.done ? 0.5 : 1,
                           touchAction: "pan-x pan-y",
                         }}
                       >
                         <span
-                          className={`pointer-events-none flex h-full items-center gap-1 whitespace-nowrap px-2 text-[12px] font-medium text-ink ${
-                            p.occ.done ? "line-through" : ""
+                          className={`pointer-events-none flex h-full items-center gap-1 whitespace-nowrap px-2 text-[12px] font-medium ${
+                            p.occ.done ? "text-faint line-through" : "text-ink"
                           } ${p.labelInside ? "sticky w-max" : "absolute left-0 top-0"}`}
                           style={p.labelInside ? { left: labelCol } : undefined}
                         >

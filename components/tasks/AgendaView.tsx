@@ -58,8 +58,12 @@ export function AgendaView({
 
     for (const o of occs) {
       if (o.done) {
-        if (showCompleted && o.end >= addDays(today, -14)) done.push({ occ: o, on: o.start });
-        continue;
+        if (!showCompleted) continue;
+        // finished tasks dated today or later stay in place (grayed out); older ones go to "Completed recently"
+        if (o.end < today) {
+          if (o.end >= addDays(today, -14)) done.push({ occ: o, on: o.start });
+          continue;
+        }
       }
       if (o.end < today) {
         overdue.push({ occ: o, on: o.end });
@@ -89,6 +93,7 @@ export function AgendaView({
 
     const sortRows = (rows: Row[]) =>
       rows.sort((a, b) => {
+        if (a.occ.done !== b.occ.done) return a.occ.done ? 1 : -1;
         const ga = groupOrder.get(a.occ.task.group_id ?? "") ?? 999;
         const gb = groupOrder.get(b.occ.task.group_id ?? "") ?? 999;
         if (ga !== gb) return ga - gb;
