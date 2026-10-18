@@ -52,7 +52,7 @@ export function TimelineView({
   occDone,
   showCompleted,
   zoom,
-  todaySignal,
+  jump,
   active,
   onOpen,
   onMove,
@@ -64,7 +64,8 @@ export function TimelineView({
   occDone: Set<string>;
   showCompleted: boolean;
   zoom: number;
-  todaySignal: number;
+  /** where to scroll: a date (first day shown at the left edge) or null for today; n changes on each press */
+  jump: { to: string | null; n: number };
   /** whether the Tasks tab is on screen (scrolling a hidden element does nothing) */
   active: boolean;
   onOpen: (task: Task, occDate: string | null) => void;
@@ -78,6 +79,7 @@ export function TimelineView({
   const to = addDays(from, RANGE_WEEKS * 7 - 1);
   const days = RANGE_WEEKS * 7;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastJump = useRef(jump.n);
   const [labelCol, setLabelCol] = useState(132);
   const [preview, setPreview] = useState<{ key: string; start: string; end: string } | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -98,7 +100,7 @@ export function TimelineView({
   );
 
   useEffect(() => {
-    const set = () => setLabelCol(window.innerWidth < 640 ? 84 : 140);
+    const set = () => setLabelCol(window.innerWidth < 640 ? 104 : 140);
     set();
     window.addEventListener("resize", set);
     return () => window.removeEventListener("resize", set);
@@ -107,8 +109,13 @@ export function TimelineView({
   // scroll so today sits near the left edge (on load, zoom change, or "Today")
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && active) el.scrollLeft = Math.max(0, (diffDays(from, today) - 3) * dw);
-  }, [dw, from, today, todaySignal, active]);
+    if (!el || !active) return;
+    const target = jump.to ?? addDays(today, -3);
+    const left = Math.max(0, diffDays(from, target) * dw);
+    const pressed = lastJump.current !== jump.n;
+    lastJump.current = jump.n;
+    el.scrollTo({ left, behavior: pressed ? "smooth" : "auto" });
+  }, [dw, from, today, jump, active]);
 
   // block page scrolling while a touch drag is active
   useEffect(() => {
@@ -356,7 +363,7 @@ export function TimelineView({
                   className="group/lane sticky left-0 z-20 flex shrink-0 items-start gap-1 border-r border-line pl-2.5 pr-1 pt-2"
                   style={{ width: labelCol, background: solidTint(lane.color, 0.35) }}
                 >
-                  <span className="line-clamp-2 min-w-0 flex-1 break-words text-[12.5px] font-semibold leading-tight" style={{ color: deepen(lane.color, 0.72) }}>
+                  <span className="line-clamp-2 min-w-0 flex-1 text-[12.5px] font-semibold leading-tight" style={{ color: deepen(lane.color, 0.72) }}>
                     {lane.name}
                   </span>
                   <button
@@ -364,7 +371,7 @@ export function TimelineView({
                     aria-label={`Add task to ${lane.name}`}
                     title={`Add task to ${lane.name}`}
                     onClick={() => onAdd(lane.id === "__none" ? null : lane.id)}
-                    className="-mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/70"
+                    className="-mt-1 flex h-7 w-6 shrink-0 items-center justify-center rounded-md sm:w-7 transition-colors hover:bg-white/70"
                     style={{ color: deepen(lane.color, 0.6) }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

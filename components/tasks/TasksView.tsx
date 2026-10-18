@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Task } from "@/lib/types";
+import { addDays, monthEnd, monthIndex, MONTHS, MONTHS_LONG, todayStr } from "@/lib/dates";
 import type { TasksStore } from "@/lib/useTasksStore";
 import { deepen } from "@/lib/colors";
 import { TimelineView, ZOOMS } from "./TimelineView";
@@ -43,7 +44,18 @@ export function TasksView({
 }) {
   const [mode, setMode] = useState<Mode>("list");
   const [zoom, setZoom] = useState(1);
-  const [todaySignal, setTodaySignal] = useState(0);
+  const [jump, setJump] = useState<{ to: string | null; n: number }>({ to: null, n: 0 });
+  const today = todayStr();
+  // first day of each of the next three months
+  const nextMonths = useMemo(() => {
+    const out: string[] = [];
+    let d = today;
+    for (let i = 0; i < 3; i++) {
+      d = addDays(monthEnd(d), 1);
+      out.push(d);
+    }
+    return out;
+  }, [today]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
   const [manageGroups, setManageGroups] = useState(false);
@@ -125,9 +137,27 @@ export function TasksView({
             >
               <ZoomIn />
             </IconButton>
-            <Button size="sm" variant="ghost" onClick={() => setTodaySignal((n) => n + 1)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={jump.to === null ? "text-ink" : ""}
+              onClick={() => setJump((j) => ({ to: null, n: j.n + 1 }))}
+            >
               Today
             </Button>
+            {nextMonths.map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant="ghost"
+                title={`Jump to ${MONTHS_LONG[monthIndex(m)]} 1, ${m.slice(0, 4)}`}
+                className={jump.to === m ? "bg-sunken text-ink" : ""}
+                onClick={() => setJump((j) => ({ to: m, n: j.n + 1 }))}
+              >
+                {MONTHS[monthIndex(m)]}
+                {m.slice(0, 4) !== today.slice(0, 4) && <span className="text-faint">{` \u2019${m.slice(2, 4)}`}</span>}
+              </Button>
+            ))}
           </div>
         )}
         <div className="flex-1" />
@@ -172,7 +202,7 @@ export function TasksView({
             occDone={store.occDone}
             showCompleted={showCompleted}
             zoom={zoom}
-            todaySignal={todaySignal}
+            jump={jump}
             active={active}
             onOpen={onOpenTask}
             onMove={store.moveTask}
