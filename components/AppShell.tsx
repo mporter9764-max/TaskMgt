@@ -49,6 +49,10 @@ export function AppShell() {
 
   const openTask = useCallback((task: Task, occDate: string | null) => setEditor({ open: true, task, occDate }), []);
   const newTask = useCallback(() => setEditor({ open: true, task: null, occDate: null }), []);
+  const newTaskInGroup = useCallback(
+    (groupId: string | null) => setEditor({ open: true, task: null, occDate: null, prefill: { group_id: groupId } }),
+    []
+  );
   const sendToTask = useCallback((title: string) => setEditor({ open: true, task: null, occDate: null, prefill: { title } }), []);
 
   if (!isConfigured) return <SetupScreen />;
@@ -98,7 +102,7 @@ export function AppShell() {
           <GoalsView store={goals} />
         </div>
         <div className={tab === "tasks" ? "flex h-[calc(100dvh-56px-16px-env(safe-area-inset-top)-72px-env(safe-area-inset-bottom))] min-h-[420px] flex-col sm:h-[calc(100dvh-56px-32px)]" : "hidden"}>
-          <TasksView store={tasks} active={tab === "tasks"} onOpenTask={openTask} onNewTask={newTask} />
+          <TasksView store={tasks} active={tab === "tasks"} onOpenTask={openTask} onNewTask={newTask} onNewTaskInGroup={newTaskInGroup} />
         </div>
         <div className={tab === "notes" ? "" : "hidden"}>
           <NotesView store={notes} onSendToTask={sendToTask} />

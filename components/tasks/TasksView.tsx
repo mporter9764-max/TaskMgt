@@ -33,11 +33,13 @@ export function TasksView({
   active,
   onOpenTask,
   onNewTask,
+  onNewTaskInGroup,
 }: {
   store: TasksStore;
   active: boolean;
   onOpenTask: (task: Task, occDate: string | null) => void;
   onNewTask: () => void;
+  onNewTaskInGroup: (groupId: string | null) => void;
 }) {
   const [mode, setMode] = useState<Mode>("list");
   const [zoom, setZoom] = useState(1);
@@ -174,6 +176,7 @@ export function TasksView({
             active={active}
             onOpen={onOpenTask}
             onMove={store.moveTask}
+            onAdd={onNewTaskInGroup}
           />
         ) : (
           <AgendaView

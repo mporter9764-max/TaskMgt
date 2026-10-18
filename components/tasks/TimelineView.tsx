@@ -56,6 +56,7 @@ export function TimelineView({
   active,
   onOpen,
   onMove,
+  onAdd,
 }: {
   tasks: Task[];
   groups: Group[];
@@ -68,6 +69,8 @@ export function TimelineView({
   active: boolean;
   onOpen: (task: Task, occDate: string | null) => void;
   onMove: (taskId: string, start: string, end: string) => void;
+  /** add a task in a lane (null = no group) */
+  onAdd: (groupId: string | null) => void;
 }) {
   const today = todayStr();
   const dw = ZOOMS[zoom] ?? 30;
@@ -350,12 +353,24 @@ export function TimelineView({
             return (
               <div key={lane.id} className="flex border-b border-line" style={{ height }}>
                 <div
-                  className="sticky left-0 z-20 flex shrink-0 items-start border-r border-line px-2.5 pt-2"
+                  className="group/lane sticky left-0 z-20 flex shrink-0 items-start gap-1 border-r border-line pl-2.5 pr-1 pt-2"
                   style={{ width: labelCol, background: solidTint(lane.color, 0.35) }}
                 >
-                  <span className="line-clamp-2 break-words text-[12.5px] font-semibold leading-tight" style={{ color: deepen(lane.color, 0.72) }}>
+                  <span className="line-clamp-2 min-w-0 flex-1 break-words text-[12.5px] font-semibold leading-tight" style={{ color: deepen(lane.color, 0.72) }}>
                     {lane.name}
                   </span>
+                  <button
+                    type="button"
+                    aria-label={`Add task to ${lane.name}`}
+                    title={`Add task to ${lane.name}`}
+                    onClick={() => onAdd(lane.id === "__none" ? null : lane.id)}
+                    className="-mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/70"
+                    style={{ color: deepen(lane.color, 0.6) }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
                 </div>
                 <div className="relative" style={{ width: days * dw }}>
                   {info.items.map((p) => {
