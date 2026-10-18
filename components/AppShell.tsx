@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { isConfigured } from "@/lib/supabase";
 import { useTasksStore } from "@/lib/useTasksStore";
 import { useNotesStore } from "@/lib/useNotesStore";
@@ -16,34 +16,21 @@ import { NoteIcon, Plus, TargetIcon, TaskIcon } from "./icons";
 type Tab = "goals" | "tasks" | "notes";
 
 const TABS: Array<{ id: Tab; label: string; Icon: typeof TaskIcon }> = [
-  { id: "goals", label: "Goals", Icon: TargetIcon },
   { id: "tasks", label: "Tasks", Icon: TaskIcon },
+  { id: "goals", label: "Goals", Icon: TargetIcon },
   { id: "notes", label: "Notes", Icon: NoteIcon },
 ];
 
 export function AppShell() {
-  const [tab, setTab] = useState<Tab>("goals");
+  // always opens on Tasks
+  const [tab, setTab] = useState<Tab>("tasks");
   const [editor, setEditor] = useState<TaskEditorState>(closedEditor);
   const tasks = useTasksStore(isConfigured);
   const notes = useNotesStore(isConfigured);
   const goals = useGoalsStore(isConfigured);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("taskmgt.tab") as Tab | null;
-      if (saved && TABS.some((t) => t.id === saved)) setTab(saved);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   function choose(t: Tab) {
     setTab(t);
-    try {
-      localStorage.setItem("taskmgt.tab", t);
-    } catch {
-      /* ignore */
-    }
     window.scrollTo({ top: 0 });
   }
 
