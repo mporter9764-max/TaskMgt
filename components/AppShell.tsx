@@ -5,20 +5,23 @@ import { isConfigured } from "@/lib/supabase";
 import { useTasksStore } from "@/lib/useTasksStore";
 import { useNotesStore } from "@/lib/useNotesStore";
 import { useGoalsStore } from "@/lib/useGoalsStore";
+import { useEnergyStore } from "@/lib/useEnergyStore";
 import type { Task } from "@/lib/types";
 import { TasksView } from "./tasks/TasksView";
 import { TaskEditor, closedEditor, type TaskEditorState } from "./tasks/TaskEditor";
 import { NotesView } from "./notes/NotesView";
 import { GoalsView } from "./goals/GoalsView";
+import { EnergyView } from "./energy/EnergyView";
 import { Button, Toaster, cx } from "./ui";
-import { NoteIcon, Plus, TargetIcon, TaskIcon } from "./icons";
+import { Flame, NoteIcon, Plus, TargetIcon, TaskIcon } from "./icons";
 
-type Tab = "goals" | "tasks" | "notes";
+type Tab = "goals" | "tasks" | "notes" | "energy";
 
 const TABS: Array<{ id: Tab; label: string; Icon: typeof TaskIcon }> = [
   { id: "tasks", label: "Tasks", Icon: TaskIcon },
   { id: "goals", label: "Goals", Icon: TargetIcon },
   { id: "notes", label: "Notes", Icon: NoteIcon },
+  { id: "energy", label: "TDEE", Icon: Flame },
 ];
 
 export function AppShell() {
@@ -28,6 +31,7 @@ export function AppShell() {
   const tasks = useTasksStore(isConfigured);
   const notes = useNotesStore(isConfigured);
   const goals = useGoalsStore(isConfigured);
+  const energy = useEnergyStore(isConfigured);
 
   function choose(t: Tab) {
     setTab(t);
@@ -94,6 +98,13 @@ export function AppShell() {
         <div className={tab === "notes" ? "" : "hidden"}>
           <NotesView store={notes} onSendToTask={sendToTask} />
         </div>
+        <div className={tab === "energy" ? "" : "hidden"}>
+          {energy.error ? (
+            <EnergySetupNeeded message={energy.error} onRetry={energy.reload} />
+          ) : (
+            <EnergyView store={energy} />
+          )}
+        </div>
       </main>
 
       {/* floating add for tasks on phones */}
@@ -110,7 +121,7 @@ export function AppShell() {
 
       {/* bottom tab bar on phones */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {TABS.map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -168,6 +179,22 @@ function ConnectionError({ message, onRetry }: { message: string; onRetry: () =>
         )}
       </ul>
       <Button variant="primary" className="mt-6" onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
+  );
+}
+
+function EnergySetupNeeded({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="mx-auto max-w-lg py-10">
+      <h2 className="text-lg font-semibold text-ink">One setup step for TDEE</h2>
+      <p className="mt-2 text-sm leading-relaxed text-muted">
+        This tab needs two new tables. In Supabase, open the SQL Editor, paste the contents of{" "}
+        <span className="font-mono">supabase/migration_energy.sql</span>, and Run. Then tap Try again.
+      </p>
+      <p className="mt-3 rounded-lg bg-surface px-3 py-2 font-mono text-[12px] text-muted">{message}</p>
+      <Button variant="primary" className="mt-5" onClick={onRetry}>
         Try again
       </Button>
     </div>

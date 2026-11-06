@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Goal } from "@/lib/types";
+import type { Goal, LogStatus } from "@/lib/types";
 import type { GoalsStore } from "@/lib/useGoalsStore";
 import type { RoleNode } from "@/lib/goalTree";
 import { goalStats, isActiveOn, periodAt, periodNoun, versionAt, type GoalData } from "@/lib/goals";
 import { addDays, diffDays, dow, fmtLong, fmtRelative, weekStart } from "@/lib/dates";
 import { alpha, deepen } from "@/lib/colors";
-import { Button, CheckDot, EmptyState, IconButton, cx } from "../ui";
-import { ChevronDown, ChevronLeft, ChevronRight, Flame } from "../icons";
+import { Button, EmptyState, IconButton, cx } from "../ui";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Flame, X } from "../icons";
 
 const BACKFILL_DAYS = 30;
 
@@ -60,13 +60,15 @@ export function TodayView({
   const totals = useMemo(() => {
     let total = 0;
     let done = 0;
+    let missed = 0;
     for (const r of tree)
       for (const g of r.all) {
         if (!isActiveOn(g, date)) continue;
         total++;
         if (data.get(g.id)?.logs.has(date)) done++;
+        else if (data.get(g.id)?.misses.has(date)) missed++;
       }
-    return { total, done };
+    return { total, done, missed, open: total - done - missed };
   }, [tree, data, date]);
 
   const hasAnyGoal = tree.some((r) => r.all.length > 0);
@@ -111,13 +113,26 @@ export function TodayView({
             {totals.done}
             <span className="text-[18px] text-faint"> / {totals.total}</span>
           </span>
-          <span className="text-[13px] text-muted">checked off {date === today ? "today" : "that day"}</span>
+          <span className="text-[13px] text-muted">done {date === today ? "today" : "that day"}</span>
         </div>
-        <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-sunken">
-          <div
-            className="h-full rounded-full bg-accent transition-[width] duration-300"
-            style={{ width: `${totals.total ? (totals.done / totals.total) * 100 : 0}%` }}
-          />
+        <div className="mt-2.5 flex h-2 gap-[2px] overflow-hidden rounded-full bg-sunken">
+          {totals.done > 0 && (
+            <div className="h-full bg-accent transition-[width] duration-300" style={{ width: `${(totals.done / totals.total) * 100}%` }} />
+          )}
+          {totals.missed > 0 && (
+            <div className="h-full transition-[width] duration-300" style={{ width: `${(totals.missed / totals.total) * 100}%`, background: MISS_SOFT }} />
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-accent" /> {totals.done} yes
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: MISS_SOFT }} /> {totals.missed} no
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-sunken ring-1 ring-line" /> {totals.open} not logged
+          </span>
         </div>
       </div>
 
@@ -164,7 +179,7 @@ export function TodayView({
                         date={date}
                         today={today}
                         color={color}
-                        onToggle={() => store.toggleLog(g.id, date)}
+                        onSet={(status) => store.setLog(g.id, date, status)}
                         onOpen={() => onOpenGoal(g)}
                       />
                     ))}
@@ -184,7 +199,7 @@ function GoalRow({
   date,
   today,
   color,
-  onToggle,
+  onSet,
   onOpen,
 }: {
   goal: Goal;
@@ -192,10 +207,11 @@ function GoalRow({
   date: string;
   today: string;
   color: string;
-  onToggle: () => void;
+  onSet: (status: LogStatus | null) => void;
   onOpen: () => void;
 }) {
   const done = gd?.logs.has(date) ?? false;
+  const missed = !done && (gd?.misses.has(date) ?? false);
   const period = gd ? periodAt(gd.periods, date) : null;
   const version = gd ? versionAt(gd.targets, date) : null;
   const stats = gd && date === today ? goalStats(gd.periods) : null;
@@ -233,19 +249,19 @@ function GoalRow({
     <div className="flex items-stretch border-t border-line">
       <button
         type="button"
-        onClick={onToggle}
-        aria-pressed={done}
-        className="flex min-h-[58px] flex-1 items-center gap-3 px-3.5 py-2.5 text-left active:bg-sunken/70"
+        onClick={onOpen}
+        aria-label={`Details for ${goal.name}`}
+        className="flex min-h-[58px] min-w-0 flex-1 items-center py-2.5 pl-3.5 pr-1 text-left active:bg-sunken/70"
       >
-        <CheckDot checked={done} color={color} size={26} />
         <span className="min-w-0 flex-1">
-          <span className={cx("block text-[15px] leading-snug", done ? "text-muted" : "text-ink")}>{goal.name}</span>
+          <span className={cx("block text-[15px] leading-snug", done || missed ? "text-muted" : "text-ink")}>{goal.name}</span>
           {detail && <span className="mt-0.5 block text-[12px] text-muted">{detail}</span>}
         </span>
       </button>
-      <button type="button" onClick={onOpen} aria-label={`Details for ${goal.name}`} className="flex w-11 shrink-0 items-center justify-center text-faint hover:text-ink">
-        <ChevronRight size={18} />
-      </button>
+      <div className="flex shrink-0 items-center gap-1.5 pr-3">
+        <ChoiceButton kind="no" on={missed} color={MISS_COLOR} label={`${goal.name}: no`} onClick={() => onSet(missed ? null : "missed")} />
+        <ChoiceButton kind="yes" on={done} color={color} label={`${goal.name}: yes`} onClick={() => onSet(done ? null : "done")} />
+      </div>
     </div>
   );
 }
@@ -257,16 +273,52 @@ function WeekDots({ gd, date, today, color }: { gd: GoalData; date: string; toda
       {Array.from({ length: 7 }, (_, i) => {
         const d = addDays(ws, i);
         const on = gd.logs.has(d);
+        const no = gd.misses.has(d);
         const inactive = !isActiveOn(gd.goal, d) || d > today;
         return (
           <span
             key={d}
             className={cx("h-[7px] w-[7px] rounded-full", d === date && "ring-1 ring-offset-1 ring-ink/40")}
-            style={{ background: on ? color : inactive ? "#efeee9" : "#d9d7d0" }}
+            style={{ background: on ? color : no ? MISS_SOFT : inactive ? "#efeee9" : "#d9d7d0" }}
             title={`${["M", "T", "W", "T", "F", "S", "S"][dow(d)]}`}
           />
         );
       })}
     </span>
+  );
+}
+
+const MISS_COLOR = "#c2410c";
+const MISS_SOFT = "#f2b8a3";
+
+/** Yes / No buttons: tap to choose, tap the chosen one again to clear back to "not logged". */
+function ChoiceButton({
+  kind,
+  on,
+  color,
+  label,
+  onClick,
+}: {
+  kind: "yes" | "no";
+  on: boolean;
+  color: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={on}
+      onClick={onClick}
+      className="flex h-11 w-11 items-center justify-center rounded-full"
+    >
+      <span
+        className="flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 transition-colors"
+        style={{ borderColor: on ? color : "#d6d4cd", background: on ? color : "transparent", color: on ? "#fff" : "#b9b7b0" }}
+      >
+        {kind === "yes" ? <Check size={17} strokeWidth={3} /> : <X size={16} strokeWidth={3} />}
+      </span>
+    </button>
   );
 }

@@ -126,10 +126,11 @@ create table if not exists goal_targets (
   unique (goal_id, effective_from)
 );
 
--- a row means "yes, I did it that day"
+-- one row per logged day: status "done" (yes) or "missed" (a conscious no); no row = not logged
 create table if not exists goal_logs (
   goal_id     uuid not null references goals(id) on delete cascade,
   log_date    date not null,
+  status      text not null default 'done' check (status in ('done', 'missed')),
   created_at  timestamptz not null default now(),
   primary key (goal_id, log_date)
 );
@@ -153,6 +154,32 @@ begin
     execute format('grant select, insert, update, delete on %I to anon, authenticated', t);
   end loop;
 end $$;
+
+-- ----------------------------------------------------------------------------
+-- ENERGY (TDEE)
+-- ----------------------------------------------------------------------------
+
+create table if not exists energy_logs (
+  log_date    date primary key,
+  steps       int  not null default 0 check (steps >= 0),
+  lifted      boolean not null default false,
+  updated_at  timestamptz not null default now()
+);
+
+create table if not exists app_settings (
+  key         text primary key,
+  value       jsonb not null,
+  updated_at  timestamptz not null default now()
+);
+
+alter table energy_logs enable row level security;
+alter table app_settings enable row level security;
+drop policy if exists "personal app access" on energy_logs;
+drop policy if exists "personal app access" on app_settings;
+create policy "personal app access" on energy_logs for all to anon, authenticated using (true) with check (true);
+create policy "personal app access" on app_settings for all to anon, authenticated using (true) with check (true);
+grant select, insert, update, delete on energy_logs to anon, authenticated;
+grant select, insert, update, delete on app_settings to anon, authenticated;
 
 -- ----------------------------------------------------------------------------
 -- STARTER DATA (edit or delete any of it in the app)

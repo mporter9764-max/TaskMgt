@@ -93,7 +93,11 @@ export interface GoalTarget {
   effective_from: string;
 }
 
+export type LogStatus = "done" | "missed";
+
 export interface GoalLog {
   goal_id: string;
   log_date: string;
+  /** "done" = yes, I did it; "missed" = a conscious no. No row = not logged. */
+  status: LogStatus;
 }

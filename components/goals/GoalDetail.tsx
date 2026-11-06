@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Goal, GoalRole, GoalSubgroup } from "@/lib/types";
+import type { Goal, GoalRole, GoalSubgroup, LogStatus } from "@/lib/types";
 import {
   describeTarget,
   dowPattern,
@@ -25,7 +25,7 @@ export function GoalDetail({
   subgroup,
   today,
   onClose,
-  onToggle,
+  onSetLog,
   onEdit,
 }: {
   open: boolean;
@@ -34,7 +34,7 @@ export function GoalDetail({
   subgroup: GoalSubgroup | undefined;
   today: string;
   onClose: () => void;
-  onToggle: (goalId: string, date: string) => void;
+  onSetLog: (goalId: string, date: string, status: LogStatus | null) => void;
   onEdit: (goal: Goal) => void;
 }) {
   const [month, setMonth] = useState(monthStart(today));
@@ -93,7 +93,8 @@ export function GoalDetail({
 
   let currentLine = "";
   if (current) {
-    if (version.period === "day") currentLine = gd.logs.has(today) ? "Done today" : "Not checked off yet today";
+    if (version.period === "day")
+      currentLine = gd.logs.has(today) ? "Done today" : gd.misses.has(today) ? "Marked no today" : "Not logged yet today";
     else {
       const left = diffDays(today, current.end) + 1;
       currentLine = `This ${version.period}: ${current.done} of ${current.target}${
@@ -165,30 +166,45 @@ export function GoalDetail({
               const inMonth = d.slice(0, 7) === month.slice(0, 7);
               const activeDay = isActiveOn(goal, d) && d <= today;
               const on = gd.logs.has(d);
+              const no = !on && gd.misses.has(d);
+              // tap cycles: not logged -> yes -> no -> not logged
+              const nextStatus: LogStatus | null = on ? "missed" : no ? null : "done";
               return (
                 <button
                   key={d}
                   type="button"
                   disabled={!activeDay || !inMonth}
-                  onClick={() => onToggle(goal.id, d)}
+                  onClick={() => onSetLog(goal.id, d, nextStatus)}
                   className={cx(
                     "flex aspect-square items-center justify-center rounded-lg text-[13px] tabular-nums transition-colors",
                     !inMonth && "invisible",
                     d === today && "ring-2 ring-ink/30"
                   )}
                   style={{
-                    background: on ? color : activeDay ? "#f3f2ee" : "transparent",
-                    color: on ? "#fff" : activeDay ? "#1d1d1b" : "#c9c7c0",
-                    fontWeight: on ? 600 : 400,
+                    background: on ? color : no ? "#f2b8a3" : activeDay ? "#f3f2ee" : "transparent",
+                    color: on ? "#fff" : no ? "#7a2a0f" : activeDay ? "#1d1d1b" : "#c9c7c0",
+                    fontWeight: on || no ? 600 : 400,
+                    textDecoration: no ? "line-through" : undefined,
                   }}
-                  aria-label={`${d}: ${on ? "done" : "not done"}`}
+                  aria-label={`${d}: ${on ? "yes" : no ? "no" : "not logged"}`}
                 >
                   {Number(d.slice(8, 10))}
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-[12px] text-faint">Tap a day to check it off or undo it.</p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} /> Yes
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "#f2b8a3" }} /> No
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-[3px] bg-[#f3f2ee] ring-1 ring-line" /> Not logged
+            </span>
+            <span className="text-faint">Tap a day to cycle yes, no, clear.</span>
+          </div>
         </Card>
 
         <Card title={version.period === "day" ? "Days per week" : `Recent ${unit}`}>

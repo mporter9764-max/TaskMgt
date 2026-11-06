@@ -48,10 +48,10 @@ export function GoalsView({ store }: { store: GoalsStore }) {
     }
     const map = new Map<string, GoalData>();
     for (const g of store.goals) {
-      map.set(g.id, buildGoalData(g, byGoal.get(g.id) ?? [], Array.from(store.logs.get(g.id) ?? []), today));
+      map.set(g.id, buildGoalData(g, byGoal.get(g.id) ?? [], Array.from(store.logs.get(g.id) ?? []), today, Array.from(store.misses.get(g.id) ?? [])));
     }
     return map;
-  }, [store.goals, store.targets, store.logs, today]);
+  }, [store.goals, store.targets, store.logs, store.misses, today]);
 
   const activeTree = useMemo(
     () => buildTree(store.roles, store.subgroups, store.goals, (g) => !g.archived_on || g.archived_on > today),
@@ -114,7 +114,7 @@ export function GoalsView({ store }: { store: GoalsStore }) {
         subgroup={detailSub}
         today={today}
         onClose={() => setDetailId(null)}
-        onToggle={store.toggleLog}
+        onSetLog={store.setLog}
         onEdit={editGoal}
       />
       <GoalForm state={form} store={store} onClose={() => setForm({ open: false, goal: null })} />

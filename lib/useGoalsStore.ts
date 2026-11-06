@@ -5,7 +5,7 @@ import { supabase } from "./supabase";
 import { fetchAll, saveOrder } from "./db";
 import { reportError, toast } from "./toast";
 import { maxStr, todayStr } from "./dates";
-import type { Goal, GoalLog, GoalRole, GoalSubgroup, GoalTarget, Period } from "./types";
+import type { Goal, GoalLog, GoalRole, GoalSubgroup, GoalTarget, LogStatus, Period } from "./types";
 
 export interface GoalInput {
   name: string;
@@ -23,9 +23,13 @@ export interface GoalsStore {
   subgroups: GoalSubgroup[];
   goals: Goal[];
   targets: GoalTarget[];
+  /** goal id -> days marked done */
   logs: Map<string, Set<string>>;
+  /** goal id -> days explicitly marked "no" */
+  misses: Map<string, Set<string>>;
   reload: () => Promise<void>;
-  toggleLog: (goalId: string, date: string) => Promise<void>;
+  /** set a day to done, missed, or back to not logged (null) */
+  setLog: (goalId: string, date: string, status: LogStatus | null) => Promise<void>;
   addRole: (name: string, color: string) => Promise<void>;
   updateRole: (id: string, patch: Partial<Pick<GoalRole, "name" | "color">>) => Promise<void>;
   deleteRole: (id: string) => Promise<void>;
@@ -49,6 +53,7 @@ export function useGoalsStore(enabled: boolean): GoalsStore {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [targets, setTargets] = useState<GoalTarget[]>([]);
   const [logs, setLogs] = useState<Map<string, Set<string>>>(new Map());
+  const [misses, setMisses] = useState<Map<string, Set<string>>>(new Map());
   const logsRef = useRef(logs);
   logsRef.current = logs;
   const targetsRef = useRef(targets);
@@ -64,11 +69,13 @@ export function useGoalsStore(enabled: boolean): GoalsStore {
         fetchAll<GoalLog>("goal_logs", "log_date"),
       ]);
       const map = new Map<string, Set<string>>();
+      const missMap = new Map<string, Set<string>>();
       for (const row of l) {
-        let set = map.get(row.goal_id);
+        const target = row.status === "missed" ? missMap : map;
+        let set = target.get(row.goal_id);
         if (!set) {
           set = new Set();
-          map.set(row.goal_id, set);
+          target.set(row.goal_id, set);
         }
         set.add(row.log_date);
       }
@@ -77,6 +84,7 @@ export function useGoalsStore(enabled: boolean): GoalsStore {
       setGoals(g);
       setTargets(t);
       setLogs(map);
+      setMisses(missMap);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -89,26 +97,28 @@ export function useGoalsStore(enabled: boolean): GoalsStore {
     if (enabled) reload();
   }, [enabled, reload]);
 
-  const toggleLog = useCallback(async (goalId: string, date: string) => {
-    const wasDone = logsRef.current.get(goalId)?.has(date) ?? false;
-    setLogs((prev) => {
+  const setLog = useCallback(async (goalId: string, date: string, status: LogStatus | null) => {
+    const update = (prev: Map<string, Set<string>>, on: boolean) => {
       const next = new Map(prev);
       const set = new Set(next.get(goalId) ?? []);
-      if (wasDone) set.delete(date);
-      else set.add(date);
+      if (on) set.add(date);
+      else set.delete(date);
       next.set(goalId, set);
       return next;
-    });
-    if (!wasDone && typeof navigator !== "undefined" && "vibrate" in navigator) {
+    };
+    setLogs((prev) => update(prev, status === "done"));
+    setMisses((prev) => update(prev, status === "missed"));
+    if (status && typeof navigator !== "undefined" && "vibrate" in navigator) {
       try {
         navigator.vibrate(8);
       } catch {
         /* not supported */
       }
     }
-    const { error } = wasDone
-      ? await supabase.from("goal_logs").delete().eq("goal_id", goalId).eq("log_date", date)
-      : await supabase.from("goal_logs").upsert({ goal_id: goalId, log_date: date }, { onConflict: "goal_id,log_date", ignoreDuplicates: true });
+    const { error } =
+      status === null
+        ? await supabase.from("goal_logs").delete().eq("goal_id", goalId).eq("log_date", date)
+        : await supabase.from("goal_logs").upsert({ goal_id: goalId, log_date: date, status }, { onConflict: "goal_id,log_date" });
     if (reportError(error, "save the check-in")) reload();
   }, [reload]);
 
@@ -246,8 +256,8 @@ export function useGoalsStore(enabled: boolean): GoalsStore {
   }, [reload]);
 
   return {
-    loading, error, roles, subgroups, goals, targets, logs, reload,
-    toggleLog,
+    loading, error, roles, subgroups, goals, targets, logs, misses, reload,
+    setLog,
     addRole, updateRole, deleteRole, reorderRoles,
     addSubgroup, updateSubgroup, deleteSubgroup, reorderSubgroups,
     createGoal, updateGoal, setArchived, deleteGoal, reorderGoals,

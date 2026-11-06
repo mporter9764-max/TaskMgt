@@ -50,7 +50,10 @@ export interface PeriodResult {
 export interface GoalData {
   goal: Goal;
   targets: GoalTarget[];
+  /** days marked done */
   logs: Set<string>;
+  /** days explicitly marked "no" */
+  misses: Set<string>;
   periods: PeriodResult[];
 }
 
@@ -82,7 +85,13 @@ export function isActiveOn(goal: Goal, d: string): boolean {
   return d >= goal.start_date && (!goal.archived_on || d < goal.archived_on);
 }
 
-export function computePeriods(goal: Goal, sorted: GoalTarget[], logs: Set<string>, today: string): PeriodResult[] {
+export function computePeriods(
+  goal: Goal,
+  sorted: GoalTarget[],
+  logs: Set<string>,
+  today: string,
+  misses: Set<string> = new Set()
+): PeriodResult[] {
   const out: PeriodResult[] = [];
   if (!sorted.length) return out;
   const archEnd = lastActiveDay(goal);
@@ -108,8 +117,12 @@ export function computePeriods(goal: Goal, sorted: GoalTarget[], logs: Set<strin
     for (let d = cursor; d <= countEnd; d = addDays(d, 1)) if (logs.has(d)) done++;
 
     const closed = end < today;
-    const status: PeriodResult["status"] = done >= target ? "hit" : closed ? "miss" : "open";
-    const openDays = closed ? 0 : diffDays(today, end) + 1 - (logs.has(today) ? 1 : 0);
+    // days still undecided: from today to the period end, not already logged yes or no
+    let openDays = 0;
+    if (!closed) for (let d = maxStr(today, cursor); d <= end; d = addDays(d, 1)) if (!logs.has(d) && !misses.has(d)) openDays++;
+    const reachable = done + openDays >= target;
+    // a period becomes a miss when it ends short, or earlier when explicit "no"s make the target impossible
+    const status: PeriodResult["status"] = done >= target ? "hit" : closed || !reachable ? "miss" : "open";
     out.push({
       period: v.period,
       start: cursor,
@@ -121,17 +134,18 @@ export function computePeriods(goal: Goal, sorted: GoalTarget[], logs: Set<strin
       done,
       closed,
       status,
-      reachable: done + openDays >= target,
+      reachable,
     });
     cursor = addDays(end, 1);
   }
   return out;
 }
 
-export function buildGoalData(goal: Goal, targets: GoalTarget[], logDates: string[], today: string): GoalData {
+export function buildGoalData(goal: Goal, targets: GoalTarget[], logDates: string[], today: string, missDates: string[] = []): GoalData {
   const sorted = sortTargets(targets);
   const logs = new Set(logDates);
-  return { goal, targets: sorted, logs, periods: computePeriods(goal, sorted, logs, today) };
+  const misses = new Set(missDates);
+  return { goal, targets: sorted, logs, misses, periods: computePeriods(goal, sorted, logs, today, misses) };
 }
 
 export function periodAt(periods: PeriodResult[], d: string): PeriodResult | null {
@@ -166,7 +180,9 @@ export function goalStats(periods: PeriodResult[], since?: string): GoalStats {
     if (current.status === "hit") streak++;
     i--;
   }
-  while (i >= 0 && periods[i].status === "hit") {
+  // an open period already lost to explicit "no"s breaks the streak now
+  const brokenNow = current?.status === "miss";
+  while (!brokenNow && i >= 0 && periods[i].status === "hit") {
     streak++;
     i--;
   }
@@ -177,7 +193,7 @@ export function goalStats(periods: PeriodResult[], since?: string): GoalStats {
     if (p.status === "hit") {
       run++;
       best = Math.max(best, run);
-    } else if (p.closed) run = 0;
+    } else if (p.status === "miss") run = 0;
   }
 
   let hits = 0;
