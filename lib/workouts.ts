@@ -18,15 +18,35 @@ export interface Exercise {
   archived: boolean;
 }
 
+/** A workout template: a named, ordered list of exercises. Scheduling lives on blocks. */
 export interface Plan {
   id: string;
   name: string;
-  /** 0 = Monday ... 6 = Sunday */
-  days: number[];
-  start_date: string;
-  end_date: string | null;
   color: string;
   sort_order: number;
+}
+
+/** A time period with a weekly layout of workouts. */
+export interface Block {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface BlockSlot {
+  id: string;
+  block_id: string;
+  /** 0 = Monday ... 6 = Sunday */
+  day: number;
+  plan_id: string;
+  sort_order: number;
+}
+
+export interface Schedule {
+  blocks: Block[];
+  slots: BlockSlot[];
+  plans: Plan[];
 }
 
 export interface PlanItem {
@@ -165,12 +185,63 @@ export function muscleCredit(ex: Exercise): Array<[string, number]> {
   return out;
 }
 
-export function planActiveOn(p: Plan, d: string): boolean {
-  return p.start_date <= d && (!p.end_date || d <= p.end_date) && p.days.includes(dow(d));
+export function blockActiveOn(b: Block, d: string): boolean {
+  return b.start_date <= d && (!b.end_date || d <= b.end_date);
 }
 
-export function plansOn(plans: Plan[], d: string): Plan[] {
-  return plans.filter((p) => planActiveOn(p, d)).sort((a, b) => a.sort_order - b.sort_order);
+/** The block in effect on a date (latest start wins if dates ever overlap). */
+export function blockOn(blocks: Block[], d: string): Block | null {
+  let best: Block | null = null;
+  for (const b of blocks) if (blockActiveOn(b, d) && (!best || b.start_date > best.start_date)) best = b;
+  return best;
+}
+
+/** Workouts scheduled for one weekday of a block, in slot order. */
+export function plansForDay(blockId: string, day: number, sch: Schedule): Plan[] {
+  const byId = new Map(sch.plans.map((p) => [p.id, p]));
+  return sch.slots
+    .filter((s) => s.block_id === blockId && s.day === day)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((s) => byId.get(s.plan_id))
+    .filter((p): p is Plan => Boolean(p));
+}
+
+/** Workouts scheduled on a date, from the block in effect that day. */
+export function plansOn(sch: Schedule, d: string): Plan[] {
+  const b = blockOn(sch.blocks, d);
+  return b ? plansForDay(b.id, dow(d), sch) : [];
+}
+
+/** Hard-set credit per muscle for one session of a workout. */
+export function setsForPlan(planId: string, items: PlanItem[], exById: Map<string, Exercise>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const it of items) {
+    if (it.plan_id !== planId) continue;
+    const ex = exById.get(it.exercise_id);
+    if (!ex) continue;
+    for (const [m, c] of muscleCredit(ex)) out.set(m, (out.get(m) ?? 0) + c * it.target_sets);
+  }
+  return out;
+}
+
+/** Working sets (primary-muscle sets counted once) in one session of a workout. */
+export function workingSetsForPlan(planId: string, items: PlanItem[], exById: Map<string, Exercise>): number {
+  return items.reduce((n, it) => n + (it.plan_id === planId && exById.get(it.exercise_id)?.primary_muscle ? it.target_sets : 0), 0);
+}
+
+/** Per muscle, planned sets for each weekday (Mon..Sun) of a block layout. */
+export function blockGrid(blockId: string, sch: Schedule, items: PlanItem[], exById: Map<string, Exercise>): Map<string, number[]> {
+  const grid = new Map<string, number[]>();
+  for (let day = 0; day < 7; day++) {
+    for (const p of plansForDay(blockId, day, sch)) {
+      setsForPlan(p.id, items, exById).forEach((v, m) => {
+        const row = grid.get(m) ?? [0, 0, 0, 0, 0, 0, 0];
+        row[day] += v;
+        grid.set(m, row);
+      });
+    }
+  }
+  return grid;
 }
 
 /** Describe a set as text, e.g. "135 × 10", "45 min", "60 s". */
@@ -224,26 +295,21 @@ export function fmtNum(v: number, digits = 1): string {
 /* ---------------------------------------------------------------------------------------------- */
 
 /** Planned hard sets per muscle for the week starting `ws` (Monday). */
-export function plannedSetsForWeek(
-  ws: string,
-  plans: Plan[],
-  items: PlanItem[],
-  exById: Map<string, Exercise>
-): Map<string, number> {
+export function plannedSetsForWeek(ws: string, sch: Schedule, items: PlanItem[], exById: Map<string, Exercise>): Map<string, number> {
   const out = new Map<string, number>();
   for (let i = 0; i < 7; i++) {
-    const d = addDays(ws, i);
-    for (const p of plans) {
-      if (!planActiveOn(p, d)) continue;
-      for (const it of items) {
-        if (it.plan_id !== p.id) continue;
-        const ex = exById.get(it.exercise_id);
-        if (!ex) continue;
-        for (const [m, c] of muscleCredit(ex)) out.set(m, (out.get(m) ?? 0) + c * it.target_sets);
-      }
+    for (const p of plansOn(sch, addDays(ws, i))) {
+      setsForPlan(p.id, items, exById).forEach((v, m) => out.set(m, (out.get(m) ?? 0) + v));
     }
   }
   return out;
+}
+
+/** Working sets planned in the week starting ws (each set counted once, matching how done sets are counted). */
+export function plannedWorkingSets(ws: string, sch: Schedule, items: PlanItem[], exById: Map<string, Exercise>): number {
+  let n = 0;
+  for (let i = 0; i < 7; i++) for (const p of plansOn(sch, addDays(ws, i))) n += workingSetsForPlan(p.id, items, exById);
+  return n;
 }
 
 export interface WorkoutIndex {
@@ -323,18 +389,26 @@ export function weeklySeries(n: number, today: string, sets: WSet[], idx: Workou
 }
 
 /** Planned sessions vs completed sessions between from and to (inclusive). */
-export function adherence(from: string, to: string, plans: Plan[], sessions: Session[]): { planned: number; done: number } {
+export function adherence(from: string, to: string, sch: Schedule, sessions: Session[]): { planned: number; done: number } {
   let planned = 0;
   let done = 0;
   const completed = new Set(sessions.filter((s) => s.completed_at && s.plan_id).map((s) => `${s.plan_id}:${s.session_date}`));
   for (let d = from; d <= to; d = addDays(d, 1)) {
-    for (const p of plans) {
-      if (!planActiveOn(p, d)) continue;
+    for (const p of plansOn(sch, d)) {
       planned++;
       if (completed.has(`${p.id}:${d}`)) done++;
     }
   }
   return { planned, done };
+}
+
+export type BandStatus = "below" | "in" | "above" | "none";
+
+export function bandStatus(v: number, low: number, high: number): BandStatus {
+  if (v <= 0) return "none";
+  if (v < low) return "below";
+  if (v > high) return "above";
+  return "in";
 }
 
 export interface ProgressPoint {

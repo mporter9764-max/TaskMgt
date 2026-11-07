@@ -23,7 +23,7 @@ export function LogView({
   const [adding, setAdding] = useState(false);
   useEffect(() => setDate(today), [today]);
 
-  const scheduled = plansOn(store.plans, date);
+  const scheduled = plansOn(store.schedule, date);
   const daySessions = store.sessions.filter((s) => s.session_date === date).sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
   const scheduledIds = new Set(scheduled.map((p) => p.id));
   const extra = daySessions.filter((s) => !s.plan_id || !scheduledIds.has(s.plan_id));

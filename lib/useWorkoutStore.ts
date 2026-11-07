@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { fetchAll } from "./db";
 import { reportError, toast } from "./toast";
-import { addDays, todayStr, weekStart } from "./dates";
 import {
   buildIndex,
   hasMuscles,
+  type Block,
+  type BlockSlot,
+  type Schedule,
   type Exercise,
   type Plan,
   type PlanItem,
@@ -29,6 +31,8 @@ const SETTINGS_KEY = "workouts";
 export type ExerciseInput = Omit<Exercise, "id" | "archived">;
 export type PlanInput = Omit<Plan, "id" | "sort_order">;
 export type PlanItemInput = Omit<PlanItem, "id" | "plan_id">;
+export type BlockInput = Omit<Block, "id">;
+export type SlotInput = Pick<BlockSlot, "day" | "plan_id">;
 export type SetPatch = Partial<Pick<WSet, "weight" | "reps" | "seconds" | "minutes" | "hard" | "done">>;
 
 export interface WorkoutStore {
@@ -38,6 +42,10 @@ export interface WorkoutStore {
   exById: Map<string, Exercise>;
   plans: Plan[];
   planItems: PlanItem[];
+  blocks: Block[];
+  blockSlots: BlockSlot[];
+  /** blocks + slots + workouts, for scheduling lookups */
+  schedule: Schedule;
   sessions: Session[];
   sessionItems: SessionItem[];
   sets: WSet[];
@@ -53,6 +61,10 @@ export interface WorkoutStore {
   savePlan: (input: PlanInput, items: PlanItemInput[], id?: string) => Promise<boolean>;
   duplicatePlan: (plan: Plan) => Promise<void>;
   deletePlan: (plan: Plan) => Promise<void>;
+  // blocks
+  saveBlock: (input: BlockInput, slots: SlotInput[], id?: string) => Promise<boolean>;
+  deleteBlock: (block: Block) => Promise<void>;
+  setBlockEnd: (block: Block, end: string | null) => Promise<boolean>;
   // sessions
   startSession: (date: string, plan: Plan | null, name?: string) => Promise<Session | null>;
   copySession: (session: Session, toDate: string) => Promise<boolean>;
@@ -74,6 +86,8 @@ export function useWorkoutStore(enabled: boolean): WorkoutStore {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [blockSlots, setBlockSlots] = useState<BlockSlot[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionItems, setSessionItems] = useState<SessionItem[]>([]);
   const [sets, setSets] = useState<WSet[]>([]);
@@ -81,22 +95,27 @@ export function useWorkoutStore(enabled: boolean): WorkoutStore {
 
   const exById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const idx = useMemo(() => buildIndex(sessions, sessionItems, sets), [sessions, sessionItems, sets]);
+  const schedule = useMemo<Schedule>(() => ({ blocks, slots: blockSlots, plans }), [blocks, blockSlots, plans]);
   const ref = useRef({ sessions, sessionItems, sets, idx, planItems, exById });
   ref.current = { sessions, sessionItems, sets, idx, planItems, exById };
 
   const reload = useCallback(async () => {
     try {
-      const [ex, pl, pi, se, si, st, cfg] = await Promise.all([
+      const [ex, pl, pi, bl, bs, se, si, st, cfg] = await Promise.all([
         fetchAll<Exercise>("wo_exercises", "name"),
         fetchAll<Plan>("wo_plans", "sort_order"),
         fetchAll<PlanItem>("wo_plan_items", "sort_order"),
+        fetchAll<Block>("wo_blocks", "start_date"),
+        fetchAll<BlockSlot>("wo_block_slots", "sort_order"),
         fetchAll<Session>("wo_sessions", "session_date"),
         fetchAll<SessionItem>("wo_session_items", "sort_order"),
         fetchAll<WSet>("wo_sets", "created_at"),
         supabase.from("app_settings").select("*").eq("key", SETTINGS_KEY).maybeSingle(),
       ]);
       setExercises(ex.map((e) => ({ ...e, secondary_muscles: e.secondary_muscles ?? [] })));
-      setPlans(pl);
+      setPlans(pl.map((p) => ({ id: p.id, name: p.name, color: p.color, sort_order: p.sort_order })));
+      setBlocks(bl);
+      setBlockSlots(bs);
       setPlanItems(
         pi.map((i) => ({
           ...i,
@@ -197,10 +216,8 @@ export function useWorkoutStore(enabled: boolean): WorkoutStore {
       const { id: _id, sort_order: _s, ...rest } = plan;
       void _id;
       void _s;
-      // the copy starts next Monday so it doesn't double up with the original this week
-      const nextMonday = addDays(weekStart(todayStr()), 7);
       await savePlan(
-        { ...rest, name: `${plan.name} (copy)`, start_date: nextMonday, end_date: rest.end_date && rest.end_date < nextMonday ? null : rest.end_date },
+        { ...rest, name: `${plan.name} (copy)` },
         items.map(({ id: _i, plan_id: _p, ...it }) => {
           void _i;
           void _p;
@@ -217,6 +234,50 @@ export function useWorkoutStore(enabled: boolean): WorkoutStore {
     setPlans((prev) => prev.filter((p) => p.id !== plan.id));
     setPlanItems((prev) => prev.filter((i) => i.plan_id !== plan.id));
     setSessions((prev) => prev.map((s) => (s.plan_id === plan.id ? { ...s, plan_id: null } : s)));
+    setBlockSlots((prev) => prev.filter((x) => x.plan_id !== plan.id));
+  }, []);
+
+  /* blocks ---------------------------------------------------------------- */
+
+  const saveBlock = useCallback(
+    async (input: BlockInput, slots: SlotInput[], id?: string) => {
+      let blockId = id;
+      if (id) {
+        const { error } = await supabase.from("wo_blocks").update(input).eq("id", id);
+        if (reportError(error, "save the block")) return false;
+        const del = await supabase.from("wo_block_slots").delete().eq("block_id", id);
+        if (reportError(del.error, "update the weekly layout")) return false;
+      } else {
+        const { data, error } = await supabase.from("wo_blocks").insert(input).select().single();
+        if (reportError(error, "create the block")) return false;
+        blockId = (data as Block).id;
+      }
+      if (slots.length) {
+        const rows = slots.map((sl, i) => ({ ...sl, block_id: blockId, sort_order: i }));
+        const { error } = await supabase.from("wo_block_slots").insert(rows);
+        if (reportError(error, "save the weekly layout")) {
+          await reload();
+          return false;
+        }
+      }
+      await reload();
+      return true;
+    },
+    [reload]
+  );
+
+  const deleteBlock = useCallback(async (block: Block) => {
+    const { error } = await supabase.from("wo_blocks").delete().eq("id", block.id);
+    if (reportError(error, "delete the block")) return;
+    setBlocks((p) => p.filter((b) => b.id !== block.id));
+    setBlockSlots((p) => p.filter((x) => x.block_id !== block.id));
+  }, []);
+
+  const setBlockEnd = useCallback(async (block: Block, end: string | null) => {
+    const { error } = await supabase.from("wo_blocks").update({ end_date: end }).eq("id", block.id);
+    if (reportError(error, "update the block")) return false;
+    setBlocks((p) => p.map((b) => (b.id === block.id ? { ...b, end_date: end } : b)));
+    return true;
   }, []);
 
   /* sessions -------------------------------------------------------------- */
@@ -417,9 +478,9 @@ export function useWorkoutStore(enabled: boolean): WorkoutStore {
   }, []);
 
   return {
-    loading, error, exercises, exById, plans, planItems, sessions, sessionItems, sets, idx, settings,
+    loading, error, exercises, exById, plans, planItems, blocks, blockSlots, schedule, sessions, sessionItems, sets, idx, settings,
     reload, saveSettings, saveExercise, removeExercise, restoreExercise,
-    savePlan, duplicatePlan, deletePlan,
+    savePlan, duplicatePlan, deletePlan, saveBlock, deleteBlock, setBlockEnd,
     startSession, copySession, deleteSession, updateSession, addExercise, removeItem, moveItem,
     addSet, updateSet, deleteSet, lastSets,
   };

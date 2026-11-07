@@ -8,6 +8,7 @@ import {
   adherence,
   fmtNum,
   plannedSetsForWeek,
+  plannedWorkingSets,
   progression,
   progressUnit,
   weeklySeries,
@@ -27,11 +28,11 @@ export function MetricsView({ store, today }: { store: WorkoutStore; today: stri
   const low = store.settings.setRangeLow;
   const high = store.settings.setRangeHigh;
 
-  const planned = useMemo(() => plannedSetsForWeek(ws, store.plans, store.planItems, store.exById), [ws, store.plans, store.planItems, store.exById]);
+  const planned = useMemo(() => plannedSetsForWeek(ws, store.schedule, store.planItems, store.exById), [ws, store.schedule, store.planItems, store.exById]);
   const actual = useMemo(() => actualSets(ws, we, store.sets, store.idx, store.exById), [ws, we, store.sets, store.idx, store.exById]);
   const series = useMemo(() => weeklySeries(12, today, store.sets, store.idx, store.exById), [today, store.sets, store.idx, store.exById]);
-  const weekAdh = useMemo(() => adherence(ws, we < today ? we : today, store.plans, store.sessions), [ws, we, today, store.plans, store.sessions]);
-  const adh4 = useMemo(() => adherence(addDays(weekStart(today), -21), today, store.plans, store.sessions), [today, store.plans, store.sessions]);
+  const weekAdh = useMemo(() => adherence(ws, we < today ? we : today, store.schedule, store.sessions), [ws, we, today, store.schedule, store.sessions]);
+  const adh4 = useMemo(() => adherence(addDays(weekStart(today), -21), today, store.schedule, store.sessions), [today, store.schedule, store.sessions]);
   // planned hard sets per week counts each working set once (primary muscle), matching how "done" is counted
   const plannedPerWeek = useMemo(() => series.map((p) => plannedTotal(store, p.week)), [series, store]);
 
@@ -206,15 +207,7 @@ export function MetricsView({ store, today }: { store: WorkoutStore; today: stri
 /* ---------------------------------------------------------------------------------------------- */
 
 function plannedTotal(store: WorkoutStore, ws: string): number {
-  let total = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(ws, i);
-    for (const plan of store.plans) {
-      if (!(plan.start_date <= d && (!plan.end_date || d <= plan.end_date) && plan.days.includes(i))) continue;
-      for (const it of store.planItems) if (it.plan_id === plan.id && store.exById.get(it.exercise_id)?.primary_muscle) total += it.target_sets;
-    }
-  }
-  return total;
+  return plannedWorkingSets(ws, store.schedule, store.planItems, store.exById);
 }
 
 function countHard(store: WorkoutStore, from: string, to: string): number {

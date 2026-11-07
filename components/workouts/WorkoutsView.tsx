@@ -56,7 +56,7 @@ export function WorkoutsView({ store, goals }: { store: WorkoutStore; goals: Goa
             className="grid w-full grid-cols-4 sm:inline-flex sm:w-auto"
             options={[
               { value: "log", label: <><Check size={15} className="hidden sm:block" /> Log</> },
-              { value: "plans", label: <><ListIcon size={15} className="hidden sm:block" /> Plans</> },
+              { value: "plans", label: <><ListIcon size={15} className="hidden sm:block" /> Plan</> },
               { value: "exercises", label: <><Dumbbell size={15} className="hidden sm:block" /> Exercises</> },
               { value: "metrics", label: <><ChartIcon size={15} className="hidden sm:block" /> Metrics</> },
             ]}
