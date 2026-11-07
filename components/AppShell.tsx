@@ -5,23 +5,23 @@ import { isConfigured } from "@/lib/supabase";
 import { useTasksStore } from "@/lib/useTasksStore";
 import { useNotesStore } from "@/lib/useNotesStore";
 import { useGoalsStore } from "@/lib/useGoalsStore";
-import { useEnergyStore } from "@/lib/useEnergyStore";
+import { useWorkoutStore } from "@/lib/useWorkoutStore";
 import type { Task } from "@/lib/types";
 import { TasksView } from "./tasks/TasksView";
 import { TaskEditor, closedEditor, type TaskEditorState } from "./tasks/TaskEditor";
 import { NotesView } from "./notes/NotesView";
 import { GoalsView } from "./goals/GoalsView";
-import { EnergyView } from "./energy/EnergyView";
+import { WorkoutsView } from "./workouts/WorkoutsView";
 import { Button, Toaster, cx } from "./ui";
-import { Flame, NoteIcon, Plus, TargetIcon, TaskIcon } from "./icons";
+import { Dumbbell, NoteIcon, Plus, TargetIcon, TaskIcon } from "./icons";
 
-type Tab = "goals" | "tasks" | "notes" | "energy";
+type Tab = "goals" | "tasks" | "notes" | "workouts";
 
 const TABS: Array<{ id: Tab; label: string; Icon: typeof TaskIcon }> = [
   { id: "tasks", label: "Tasks", Icon: TaskIcon },
   { id: "goals", label: "Goals", Icon: TargetIcon },
   { id: "notes", label: "Notes", Icon: NoteIcon },
-  { id: "energy", label: "TDEE", Icon: Flame },
+  { id: "workouts", label: "Workouts", Icon: Dumbbell },
 ];
 
 export function AppShell() {
@@ -31,7 +31,7 @@ export function AppShell() {
   const tasks = useTasksStore(isConfigured);
   const notes = useNotesStore(isConfigured);
   const goals = useGoalsStore(isConfigured);
-  const energy = useEnergyStore(isConfigured);
+  const workouts = useWorkoutStore(isConfigured);
 
   function choose(t: Tab) {
     setTab(t);
@@ -98,11 +98,11 @@ export function AppShell() {
         <div className={tab === "notes" ? "" : "hidden"}>
           <NotesView store={notes} onSendToTask={sendToTask} />
         </div>
-        <div className={tab === "energy" ? "" : "hidden"}>
-          {energy.error ? (
-            <EnergySetupNeeded message={energy.error} onRetry={energy.reload} />
+        <div className={tab === "workouts" ? "" : "hidden"}>
+          {workouts.error ? (
+            <WorkoutsSetupNeeded message={workouts.error} onRetry={workouts.reload} />
           ) : (
-            <EnergyView store={energy} />
+            <WorkoutsView store={workouts} goals={goals} />
           )}
         </div>
       </main>
@@ -185,13 +185,13 @@ function ConnectionError({ message, onRetry }: { message: string; onRetry: () =>
   );
 }
 
-function EnergySetupNeeded({ message, onRetry }: { message: string; onRetry: () => void }) {
+function WorkoutsSetupNeeded({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="mx-auto max-w-lg py-10">
-      <h2 className="text-lg font-semibold text-ink">One setup step for TDEE</h2>
+      <h2 className="text-lg font-semibold text-ink">One setup step for Workouts</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted">
-        This tab needs two new tables. In Supabase, open the SQL Editor, paste the contents of{" "}
-        <span className="font-mono">supabase/migration_energy.sql</span>, and Run. Then tap Try again.
+        This tab needs its tables. In Supabase, open the SQL Editor, paste the contents of{" "}
+        <span className="font-mono">supabase/migration_workouts.sql</span>, and Run. Then tap Try again.
       </p>
       <p className="mt-3 rounded-lg bg-surface px-3 py-2 font-mono text-[12px] text-muted">{message}</p>
       <Button variant="primary" className="mt-5" onClick={onRetry}>
